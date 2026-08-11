@@ -1,0 +1,1371 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E4E6DF">
+<title>Centreline</title>
+<style>
+/* ============================================================
+   CENTRELINE — yardage-book instrument
+   Paper stock, hard rules, spot red/blue, mono data.
+   ============================================================ */
+:root{
+  --paper:#E4E6DF;
+  --paper-2:#EDEEE8;
+  --ink:#16181A;
+  --ink-2:#5A5F58;
+  --rule:#B9BCB2;
+  --turf:#C6CDBC;
+  --red:#C8352A;
+  --blue:#2E5C8A;
+  --mono: ui-monospace, "SF Mono", "Roboto Mono", "DejaVu Sans Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:16px; line-height:1.45;
+  padding:0 0 96px; max-width:640px; margin:0 auto;
+  padding-left:max(12px, env(safe-area-inset-left));
+  padding-right:max(12px, env(safe-area-inset-right));
+}
+button,input,select,textarea{font:inherit; color:inherit}
+
+/* --- masthead ------------------------------------------------ */
+.mast{
+  display:flex; align-items:baseline; gap:10px;
+  border-bottom:3px solid var(--ink); padding:14px 0 6px; margin-bottom:14px;
+  position:sticky; top:0; background:var(--paper); z-index:20;
+}
+.mast h1{
+  font-family:var(--mono); font-size:15px; font-weight:700;
+  letter-spacing:.28em; text-transform:uppercase; margin:0;
+}
+.mast .sub{
+  font-family:var(--mono); font-size:10px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-2); margin-left:auto; text-align:right;
+}
+
+/* --- section headers ---------------------------------------- */
+.eyebrow{
+  font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--ink-2); border-bottom:1px solid var(--rule);
+  padding-bottom:4px; margin:22px 0 10px; display:flex; gap:8px; align-items:center;
+}
+.eyebrow b{color:var(--ink); font-weight:700}
+.eyebrow .fill{margin-left:auto; font-weight:400}
+
+/* --- blocks -------------------------------------------------- */
+.block{border:1px solid var(--rule); background:var(--paper-2); padding:12px; margin-bottom:10px}
+.block.flush{padding:0}
+.note{font-size:12.5px; color:var(--ink-2); line-height:1.5}
+
+/* --- buttons ------------------------------------------------- */
+.btn{
+  display:block; width:100%; min-height:52px; padding:12px 14px;
+  background:var(--paper-2); border:1.5px solid var(--ink); border-radius:2px;
+  font-family:var(--mono); font-size:13px; letter-spacing:.1em; text-transform:uppercase;
+  text-align:left; cursor:pointer; margin-bottom:8px;
+}
+.btn:active{background:var(--turf)}
+.btn.solid{background:var(--ink); color:var(--paper)}
+.btn.solid:active{background:#000}
+.btn.ghost{border-color:var(--rule); font-size:12px; min-height:44px}
+.btn.danger{border-color:var(--red); color:var(--red)}
+.btn .rt{float:right; opacity:.6}
+.row{display:flex; gap:8px}
+.row>.btn{margin-bottom:8px}
+
+/* --- chips (club / option pickers) --------------------------- */
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0}
+.chip{
+  flex:0 0 auto; min-height:44px; padding:8px 12px;
+  border:1px solid var(--rule); background:var(--paper); border-radius:2px;
+  font-family:var(--mono); font-size:13px; cursor:pointer;
+}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.chips.grid{display:grid; grid-template-columns:repeat(3,1fr)}
+.chips.grid .chip{text-align:center; padding:8px 4px; font-size:12.5px}
+.chips.two{display:grid; grid-template-columns:repeat(2,1fr)}
+.chips.four{display:grid; grid-template-columns:repeat(4,1fr)}
+.chips.four .chip{text-align:center; padding:8px 2px; font-size:12px}
+
+/* --- field / label ------------------------------------------- */
+.lbl{
+  font-family:var(--mono); font-size:10px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--ink-2); display:block; margin:12px 0 4px;
+}
+.lbl:first-child{margin-top:0}
+input[type=text],input[type=number]{
+  width:100%; min-height:48px; padding:10px 12px;
+  border:1px solid var(--ink); background:var(--paper); border-radius:2px;
+  font-family:var(--mono); font-size:16px;
+}
+textarea{
+  width:100%; min-height:60px; padding:10px 12px; border:1px solid var(--rule);
+  background:var(--paper); border-radius:2px; font-family:var(--sans); font-size:14px; resize:vertical;
+}
+
+/* --- stepper ------------------------------------------------- */
+.step{display:flex; align-items:center; gap:0; border:1px solid var(--ink); border-radius:2px; overflow:hidden}
+.step button{width:52px; min-height:48px; background:var(--paper-2); border:0; border-right:1px solid var(--rule); font-size:20px; font-family:var(--mono); cursor:pointer}
+.step button:last-child{border-right:0; border-left:1px solid var(--rule)}
+.step span{flex:1; text-align:center; font-family:var(--mono); font-size:17px; font-weight:700}
+
+/* --- hole header --------------------------------------------- */
+.holehead{
+  display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
+  border-top:3px solid var(--ink); border-bottom:1px solid var(--ink);
+  padding:10px 0; margin-bottom:6px;
+}
+.holenum{font-family:var(--mono); font-size:40px; font-weight:700; line-height:.9; letter-spacing:-.02em}
+.holemeta{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2)}
+.holemeta b{color:var(--ink)}
+.holescore{text-align:right; font-family:var(--mono)}
+.holescore .n{font-size:30px; font-weight:700; line-height:1}
+.holescore .k{font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-2)}
+
+/* --- shot rows + SIGNATURE deviation strip ------------------- */
+.shot{border-bottom:1px solid var(--rule); padding:10px 12px}
+.shot:last-child{border-bottom:0}
+.shot-top{display:flex; align-items:baseline; gap:8px; font-family:var(--mono); font-size:13px}
+.shot-seq{width:22px; color:var(--ink-2); font-size:11px}
+.shot-club{font-weight:700; flex:1}
+.shot-tag{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-2)}
+.shot-acc{font-size:10px; color:var(--ink-2)}
+
+/* the instrument */
+.gauge{margin-top:8px; position:relative; height:26px}
+.gauge .track{position:absolute; top:12px; left:0; right:0; height:1px; background:var(--rule)}
+.gauge .zero{position:absolute; top:4px; left:50%; width:1.5px; height:17px; background:var(--ink); transform:translateX(-50%)}
+.gauge .tick{position:absolute; top:9px; width:1px; height:7px; background:var(--rule)}
+.gauge .pin{
+  position:absolute; top:5px; width:9px; height:15px; margin-left:-4.5px;
+  border:1.5px solid var(--ink); background:var(--paper);
+}
+.gauge .pin.L{border-color:var(--blue); background:var(--blue)}
+.gauge .pin.R{border-color:var(--red); background:var(--red)}
+.gauge .pin.est{background:var(--paper)}
+.gauge .val{
+  position:absolute; top:0; right:0; font-family:var(--mono); font-size:11px; font-weight:700;
+}
+.gauge .val.L{color:var(--blue)} .gauge .val.R{color:var(--red)}
+.gauge .ends{position:absolute; top:14px; left:0; right:0; display:flex; justify-content:space-between;
+  font-family:var(--mono); font-size:9px; color:var(--ink-2); letter-spacing:.1em}
+.pending{font-family:var(--mono); font-size:11px; color:var(--ink-2); margin-top:6px; font-style:italic}
+
+/* --- putt rows ----------------------------------------------- */
+.putt{border-bottom:1px solid var(--rule); padding:9px 12px; font-family:var(--mono); font-size:12.5px}
+.putt:last-child{border-bottom:0}
+.putt .p1{display:flex; gap:8px; align-items:baseline}
+.putt .len{font-weight:700; font-size:15px; min-width:56px}
+.putt .res{letter-spacing:.1em; text-transform:uppercase; font-size:11px}
+.putt .res.made{color:var(--blue); font-weight:700}
+.putt .errs{color:var(--red); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; margin-top:3px}
+.putt .x{margin-left:auto; color:var(--ink-2); cursor:pointer; padding:0 6px}
+
+/* --- setup grid ---------------------------------------------- */
+.hgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+.hcell{
+  border:1px solid var(--rule); background:var(--paper); padding:8px 6px; cursor:pointer;
+  font-family:var(--mono); text-align:left; border-radius:2px; min-height:60px;
+}
+.hcell .n{font-size:17px; font-weight:700}
+.hcell .m{font-size:9.5px; color:var(--ink-2); letter-spacing:.1em; text-transform:uppercase}
+.hcell .st{font-size:10px; margin-top:3px; letter-spacing:.16em}
+.hcell.done{background:var(--turf); border-color:var(--ink)}
+.hcell.done .st{color:var(--ink)}
+.hcell .st.no{color:var(--red)}
+
+/* --- footer nav ---------------------------------------------- */
+.foot{
+  position:fixed; left:0; right:0; bottom:0; background:var(--paper);
+  border-top:3px solid var(--ink); padding:8px max(12px, env(safe-area-inset-left));
+  padding-bottom:max(8px, env(safe-area-inset-bottom));
+  display:flex; gap:8px; max-width:640px; margin:0 auto; z-index:20;
+}
+.foot .btn{margin:0}
+.foot .btn.nar{flex:0 0 68px; text-align:center; padding:12px 4px}
+
+/* --- toast --------------------------------------------------- */
+#cts{position:fixed; inset:0; background:var(--paper); z-index:70; display:none; overflow-y:auto;
+  padding:20px max(14px,env(safe-area-inset-left)) 28px}
+#cts.on{display:block}
+.ctswrap{max-width:520px; margin:0 auto}
+.ctshead{font-family:var(--mono); font-size:11px; letter-spacing:.24em; text-transform:uppercase;
+  color:var(--ink-2); border-bottom:3px solid var(--ink); padding-bottom:8px; margin-bottom:18px}
+.ctsrow{display:grid; grid-template-columns:64px 1fr; gap:14px; align-items:start;
+  border-bottom:1px solid var(--rule); padding:16px 0}
+.ctsL{font-family:var(--mono); font-size:52px; font-weight:700; line-height:.8; color:var(--k)}
+.ctsN{font-family:var(--mono); font-size:15px; font-weight:700; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--k); margin-bottom:8px}
+.ctsI{font-size:16px; padding:3px 0 3px 14px; position:relative; color:var(--ink)}
+.ctsI:before{content:''; position:absolute; left:0; top:12px; width:7px; height:1.5px; background:var(--k)}
+#cts .btn{margin-top:20px}
+#toast{
+  position:fixed; left:50%; bottom:84px; transform:translateX(-50%);
+  background:var(--ink); color:var(--paper); font-family:var(--mono); font-size:12px;
+  padding:10px 16px; border-radius:2px; z-index:60; max-width:90%; text-align:center;
+  opacity:0; pointer-events:none; transition:opacity .18s;
+}
+#toast.on{opacity:1}
+
+/* --- gps capture overlay ------------------------------------- */
+#gps{
+  position:fixed; inset:0; background:rgba(22,24,26,.94); color:var(--paper);
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  z-index:80; font-family:var(--mono); text-align:center; padding:24px;
+}
+#gps.on{display:flex}
+#gps .big{font-size:44px; font-weight:700; letter-spacing:-.02em}
+#gps .cap{font-size:10px; letter-spacing:.24em; text-transform:uppercase; opacity:.6; margin-bottom:14px}
+#gps .bar{width:180px; height:2px; background:rgba(255,255,255,.2); margin:18px 0; overflow:hidden}
+#gps .bar i{display:block; height:100%; width:0; background:var(--paper)}
+#gps button{margin-top:10px; background:transparent; border:1px solid rgba(255,255,255,.4); color:var(--paper);
+  padding:12px 20px; font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; border-radius:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none !important; animation:none !important}}
+
+pre.csv{
+  background:var(--paper-2); border:1px solid var(--rule); padding:10px; overflow:auto;
+  font-family:var(--mono); font-size:10.5px; max-height:220px; white-space:pre; margin:0 0 8px;
+}
+</style>
+
+<div class="mast">
+  <h1>Centreline</h1>
+  <div class="sub" id="mastsub"></div>
+</div>
+
+<div id="app"></div>
+<div class="foot" id="foot"></div>
+<div id="toast"></div>
+<div id="cts">
+  <div class="ctswrap">
+    <div class="ctshead">Before the shot</div>
+    <div class="ctsrow" style="--k:var(--blue)">
+      <div class="ctsL">C</div>
+      <div><div class="ctsN">Conditions</div>
+        <div class="ctsI">Lie</div><div class="ctsI">Wind</div><div class="ctsI">Topography</div></div>
+    </div>
+    <div class="ctsrow" style="--k:var(--red)">
+      <div class="ctsL">T</div>
+      <div><div class="ctsN">Target</div>
+        <div class="ctsI">Distance</div><div class="ctsI">Land and roll spot</div><div class="ctsI">Where to miss</div></div>
+    </div>
+    <div class="ctsrow" style="--k:var(--ink)">
+      <div class="ctsL">S</div>
+      <div><div class="ctsN">Swing</div>
+        <div class="ctsI">Shot shape</div><div class="ctsI">Club</div><div class="ctsI">Swing feel</div></div>
+    </div>
+    <div class="row">
+      <button class="btn solid" onclick="markRoutine(true)">Ran it</button>
+      <button class="btn ghost" onclick="markRoutine(false)">Skipped</button>
+    </div>
+    <button class="btn ghost" onclick="S.routineAuto=false;save();closeCTS()">Stop showing this automatically</button>
+  </div>
+</div>
+<div id="gps">
+  <div class="cap">Acquiring position</div>
+  <div class="big" id="gpsacc">--</div>
+  <div class="cap" style="margin:6px 0 0">metres accuracy</div>
+  <div class="bar"><i id="gpsbar"></i></div>
+  <button id="gpsuse">Use now</button>
+  <button id="gpscancel" style="border-color:rgba(255,255,255,.15)">Cancel</button>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — edit these two lists to match your bag
+   ============================================================ */
+/* Expected TOTAL distance in metres — carry plus roll, on grass. Edit in Bag. */
+const DEFAULT_BAG = [
+  {club:'Driver',  d:258}, {club:'Mini Dr', d:230}, {club:'3 Wood', d:215},
+  {club:'Hyb 21',  d:200}, {club:'4 Iron',  d:183}, {club:'5 Iron', d:174},
+  {club:'6 Iron',  d:163}, {club:'7 Iron',  d:153}, {club:'8 Iron', d:144},
+  {club:'9 Iron',  d:134}, {club:'PW',      d:125}, {club:'GW',     d:113},
+  {club:'56',      d:105}, {club:'60',      d:90},
+];
+const GAUGE_RANGE = 40; // metres each side shown on the deviation strip
+
+/* Heidelberg GC — strategic lines, tee end to green centre, one row per hole.
+   Drawn in Google Earth; [lat, lng] to six decimals (~0.1 m). */
+const HEIDELBERG = [
+  [[-37.731869,145.110467],[-37.731989,145.110461],[-37.732761,145.1104],[-37.733545,145.110244],[-37.733775,145.109994],[-37.734284,145.109782],[-37.734471,145.109632],[-37.734671,145.109629]],
+  [[-37.733656,145.108425],[-37.733537,145.107752]],
+  [[-37.733329,145.107201],[-37.733307,145.106647],[-37.73322,145.106219],[-37.733149,145.105721],[-37.733118,145.105164],[-37.733116,145.104589]],
+  [[-37.7325,145.105897],[-37.732428,145.106511],[-37.73241,145.106836],[-37.732388,145.107421],[-37.732208,145.108208],[-37.732066,145.108703],[-37.732003,145.109135],[-37.732021,145.109541]],
+  [[-37.730508,145.111057],[-37.730264,145.11134],[-37.72997,145.111581],[-37.729689,145.111832],[-37.729458,145.112074],[-37.729248,145.11228],[-37.729069,145.112504]],
+  [[-37.728721,145.114032],[-37.728629,145.114591]],
+  [[-37.729069,145.113942],[-37.729143,145.11347],[-37.729268,145.113225],[-37.729385,145.112979],[-37.729582,145.112734],[-37.729917,145.112629],[-37.730162,145.112367]],
+  [[-37.729785,145.113412],[-37.729418,145.114399],[-37.729261,145.115136],[-37.729152,145.115815],[-37.729098,145.116014]],
+  [[-37.7299,145.115568],[-37.730232,145.114938],[-37.730301,145.114311],[-37.730467,145.113696],[-37.730663,145.113183],[-37.73086,145.112256],[-37.730825,145.1116]],
+  [[-37.731178,145.11194],[-37.731257,145.112782],[-37.731349,145.113309],[-37.731466,145.113449],[-37.731583,145.113523],[-37.73234,145.11412]],
+  [[-37.731715,145.11482],[-37.731043,145.114961],[-37.730878,145.115098],[-37.730774,145.115311],[-37.730425,145.115709],[-37.730023,145.116072],[-37.729757,145.116358],[-37.729309,145.116867]],
+  [[-37.730233,145.116833],[-37.73079,145.116422],[-37.731175,145.116067],[-37.731623,145.115698],[-37.732199,145.115327]],
+  [[-37.731009,145.117038],[-37.730595,145.117398]],
+  [[-37.731645,145.117109],[-37.731943,145.116589],[-37.732258,145.116232],[-37.732906,145.115869],[-37.733947,145.115316],[-37.73423,145.114965],[-37.734894,145.114462]],
+  [[-37.734863,145.113177],[-37.734711,145.112475],[-37.7347,145.111717],[-37.734704,145.11111],[-37.73483,145.110629]],
+  [[-37.734136,145.110957],[-37.733639,145.111338],[-37.733283,145.111449],[-37.732879,145.111427],[-37.732564,145.111342]],
+  [[-37.733235,145.112295],[-37.73335,145.112469],[-37.733465,145.112577],[-37.733597,145.112646],[-37.733932,145.112571]],
+  [[-37.732789,145.112769],[-37.732365,145.112392],[-37.731753,145.111709],[-37.731463,145.111336],[-37.731341,145.11102]],
+];
+/* Heidelberg GC scorecard, White tees — [par, stroke index, metres].
+   5726 m, par 72 (36 out / 36 in). The card also carries a separate match index; this is
+   the stroke index from the White card, which is what stableford uses. */
+const HGC_CARD = [
+  [4, 5,355],[3,14,143],[4, 4,369],[5, 7,442],[4,18,260],[3,17, 98],
+  [4,10,311],[4, 1,352],[5,11,479],[4, 6,311],[5,12,432],[4, 9,345],
+  [3,15,153],[5, 2,541],[4,13,362],[4, 8,297],[3,16,137],[4, 3,339],
+];
+/* Course management notes, indexed by hole. Blank where none written yet. */
+const HGC_PLANS = [
+  '',                                                                    // 1
+  '',                                                                    // 2
+  'Drive: 20 m past the tree on the left.',                              // 3
+  'Drive: 60 m short of the tree on the left.\nApproach: land at or past the dark tree on the left, beyond the big tree.', // 4
+  'Off the tee: distance to the big tree on the right, plus 20 m.',      // 5
+  '',                                                                    // 6
+  'Widest part of the fairway. Leaves 145 m in.',                        // 7
+  'Try a hybrid here.',                                                  // 8
+  '',                                                                    // 9
+  'Leave 120 m in, from abeam the bunker.',                              // 10
+  'Distance to the big tree on the left, plus 10 m.',                    // 11
+  '30 m past the overhanging branch on the right.\nHole opens up to the right.', // 12
+  'Long and right. 8 m past the right bunker lip.',                      // 13
+  '30 m past the tree on the left.',                                     // 14
+  'Hybrid, aiming just inside the left rough. Right of the cart path.',  // 15
+  'Aim just inside the left rough.',                                     // 16
+  '',                                                                    // 17
+  'Aim just inside the left rough.',                                     // 18
+];
+const DEFAULT_TEES = ['White','Blue','Black'];
+const seedCourse = (name,rows,card)=>({
+  id:'heidelberg', name, tees:DEFAULT_TEES.slice(),
+  holes: rows.map((pts,i)=>({
+    n:i+1,
+    par:  card?card[i][0]:4,
+    si:   card?card[i][1]:i+1,
+    cardM:card?card[i][2]:null, plan:HGC_PLANS[i]||'',
+    path: pts.map(q=>({lat:q[0], lng:q[1], acc:null, src:'map', ts:0})) }))
+});
+
+/* ============================================================
+   STORAGE — works in the Claude artifact sandbox (window.storage)
+   and as a plain hosted page (localStorage).
+   ============================================================ */
+const Store = {
+  async get(k){
+    if (window.storage) { try{ const r = await window.storage.get(k); return r? JSON.parse(r.value):null; }catch(e){ return null; } }
+    try{ const v = localStorage.getItem(k); return v? JSON.parse(v):null; }catch(e){ return null; }
+  },
+  async set(k,v){
+    const s = JSON.stringify(v);
+    if (window.storage) { try{ await window.storage.set(k,s); return true; }catch(e){} }
+    try{ localStorage.setItem(k,s); return true; }catch(e){ return false; }
+  }
+};
+
+/* ============================================================
+   GEO
+   ============================================================ */
+const R = 6371000;
+const rad = d => d*Math.PI/180;
+
+function proj(p, o){ // equirectangular metres about origin o
+  return { x: rad(p.lng-o.lng)*Math.cos(rad(o.lat))*R, y: rad(p.lat-o.lat)*R };
+}
+function dist(p1,p2){
+  if(!p1||!p2) return null;
+  const a = proj(p2,p1); return Math.hypot(a.x,a.y);
+}
+/* signed perpendicular offset of P from line A->B. +ve = LEFT of travel */
+function offLine(P,A,B){
+  if(!P||!A||!B) return null;
+  const b = proj(B,A), p = proj(P,A);
+  const L = Math.hypot(b.x,b.y); if(L<1) return null;
+  return (b.x*p.y - b.y*p.x)/L;
+}
+/* miss vs an aim point G, measured along the line you played it from (S->G).
+   returns {lat: +left/-right, lon: +long/-short} */
+function offPoint(P,S,G){
+  if(!P||!S||!G) return null;
+  const d = proj(G,S), e = proj(P,G);
+  const L = Math.hypot(d.x,d.y); if(L<1) return null;
+  const ux=d.x/L, uy=d.y/L;
+  return { lat: (ux*e.y - uy*e.x), lon: (ux*e.x + uy*e.y) };
+}
+
+/* nearest point on a polyline. off is signed, + = left of travel.
+   station is distance along the path to the foot of that perpendicular. */
+function onPath(P,path){
+  if(!P||!path||path.length<2) return null;
+  const o=path[0], pts=path.map(q=>proj(q,o)), p=proj(P,o);
+  let best=null, cum=0;
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], b=pts[i+1], dx=b.x-a.x, dy=b.y-a.y, L2=dx*dx+dy*dy, L=Math.sqrt(L2);
+    if(L<0.5) continue;
+    const tc=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/L2));
+    const d=Math.hypot(p.x-(a.x+tc*dx), p.y-(a.y+tc*dy));
+    const sgn=(dx*(p.y-a.y)-dy*(p.x-a.x))>=0 ? 1 : -1;
+    if(!best || d<best.d) best={d, off:d*sgn, station:cum+tc*L, seg:i};
+    cum+=L;
+  }
+  return best;
+}
+function stations(path){
+  const out=[0]; if(!path||path.length<2) return out;
+  const o=path[0], pts=path.map(q=>proj(q,o));
+  let cum=0;
+  for(let i=0;i<pts.length-1;i++){ cum+=Math.hypot(pts[i+1].x-pts[i].x, pts[i+1].y-pts[i].y); out.push(cum); }
+  return out;
+}
+function unproj(x,y,o){
+  return { lat:o.lat + (y/R)*180/Math.PI,
+           lng:o.lng + (x/(R*Math.cos(rad(o.lat))))*180/Math.PI };
+}
+/* Walk the line forward from the ball and find where it is exactly D metres away.
+   That point is what you were trying to reach with this club. */
+function pointAtDistance(ball,path,D){
+  const o=path[0], pts=path.map(q=>proj(q,o)), b=proj(ball,o);
+  const here=onPath(ball,path), s0=here?here.station:0;
+  let cum=0;
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], c=pts[i+1], dx=c.x-a.x, dy=c.y-a.y;
+    const segL=Math.hypot(dx,dy);
+    if(segL<0.5){ cum+=segL; continue; }
+    const fx=a.x-b.x, fy=a.y-b.y;
+    const A=dx*dx+dy*dy, B=2*(fx*dx+fy*dy), C=fx*fx+fy*fy-D*D;
+    const disc=B*B-4*A*C;
+    if(disc>=0){
+      const sq=Math.sqrt(disc);
+      const roots=[(-B-sq)/(2*A),(-B+sq)/(2*A)].filter(t=>t>=0&&t<=1).sort((x,y)=>x-y);
+      for(const t of roots){
+        if(cum + t*segL <= s0 + 1) continue;   // must be up-course of the ball
+        return unproj(a.x+t*dx, a.y+t*dy, o);
+      }
+    }
+    cum+=segL;
+  }
+  return null;
+}
+
+/* What were you aiming at?
+   The point on your line that sits one club's distance away. If the club would carry
+   past the end of the line, the target is the green. */
+function aimFor(origin,path,clubDist){
+  if(!path||path.length<2) return null;
+  const last=path.length-1;
+  if(clubDist>0){
+    const p=pointAtDistance(origin,path,clubDist);
+    if(p) return {pt:p, name:Math.round(clubDist)+'m'};
+  }
+  return {pt:path[last], name:'green'};
+}
+
+/* accept "-37.74001, 145.10002" in more or less any punctuation */
+function parseLL(str){
+  const n = String(str).match(/-?\d+\.\d{3,}/g);
+  if(!n || n.length<2) return null;
+  const lat=parseFloat(n[0]), lng=parseFloat(n[1]);
+  if(!isFinite(lat)||!isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180) return null;
+  return {lat,lng,acc:null,src:'map',ts:Date.now()};
+}
+const ptLabel = p => !p ? 'not marked' : (p.src==='map' ? 'from map' : '\u00b1'+p.acc+' m GPS');
+
+let GEO_WHY='';   // why the last fix failed, in plain words
+
+function geoEnv(){
+  return {
+    proto: location.protocol,
+    secure: !!window.isSecureContext,
+    framed: window.top !== window.self,
+    api: !!navigator.geolocation
+  };
+}
+const NO_ORIGIN = ['content:','file:','blob:','data:'];
+function geoReason(err){
+  const e=geoEnv();
+  if(!e.api)    return 'This browser has no geolocation API.';
+  if(e.framed)  return 'Blocked inside a preview frame. Open the file in its own browser tab.';
+  if(NO_ORIGIN.includes(e.proto)){
+    return 'This page was opened as a local file ('+e.proto+'), so it has no web address. '+
+           'Browsers never give location to those, and it will not appear in your site settings. '+
+           'It has to be served from an https:// address.';
+  }
+  if(err && err.code===1){
+    return e.proto==='file:'
+      ? 'Denied. Pages opened straight from disk (file://) are not granted location by most browsers — it needs to be served over https.'
+      : 'Permission denied. Allow location for this site in your browser settings.';
+  }
+  if(err && err.code===2) return 'Position unavailable. No signal, or the device has no GPS — a desktop with no wifi lookup will fail here.';
+  if(err && err.code===3) return 'Timed out before any fix arrived.';
+  return 'No fix arrived within 6 seconds.';
+}
+
+/* best-of-N GPS fix over ~6s, keep the tightest accuracy */
+function capture(){
+  return new Promise(resolve=>{
+    GEO_WHY='';
+    if(!navigator.geolocation){ GEO_WHY=geoReason(null); resolve(null); return; }
+    const ov=document.getElementById('gps'), accEl=document.getElementById('gpsacc'), bar=document.getElementById('gpsbar');
+    ov.classList.add('on'); let best=null, done=false, t0=Date.now();
+    const finish = ()=>{ if(done) return; done=true; navigator.geolocation.clearWatch(id); clearInterval(tick); ov.classList.remove('on'); resolve(best); };
+    const id = navigator.geolocation.watchPosition(p=>{
+      const f={lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy),ts:Date.now()};
+      if(!best || f.acc<best.acc){ best=f; accEl.textContent=f.acc; }
+      if(f.acc<=4) finish();
+    }, e=>{ accEl.textContent='\u2014'; GEO_WHY=geoReason(e);
+            if(!best) finish(); }, {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+    const tick=setInterval(()=>{ const pc=Math.min(100,(Date.now()-t0)/6000*100); bar.style.width=pc+'%';
+      if(pc>=100){ if(!best && !GEO_WHY) GEO_WHY=geoReason(null); finish(); } },100);
+    document.getElementById('gpsuse').onclick=finish;
+    document.getElementById('gpscancel').onclick=()=>{ best=null; finish(); };
+  });
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let S = { screen:'home', courses:{}, cid:null, hsetup:0, round:null, hi:0, archive:[], tee:'', edit:null, bag:[], hcp:13, routineAuto:true, editPlan:false };
+const clubDist = name => { const c=S.bag.find(x=>x.club===name); return c && c.d>0 ? c.d : 0; };
+const uid = ()=> Math.random().toString(36).slice(2,9);
+const blankHoles = ()=> Array.from({length:18},(_,i)=>({n:i+1,par:4,si:i+1,path:[]}));
+/* older saves stored a / b / green as three fixed points */
+function migrate(h){
+  if(!h.path){ h.path=[h.a,h.b,h.green].filter(Boolean); delete h.a; delete h.b; delete h.green; }
+  if(h.plan===undefined) h.plan='';
+  if(h.cardM===undefined) h.cardM=null;
+  return h;
+}
+/* Shots received on a hole: one to every index at or under your handicap,
+   plus another lap for anything over 18. */
+function received(si,hcp){
+  if(!hcp||hcp<=0) return 0;
+  return Math.floor(hcp/18) + (si <= hcp%18 ? 1 : 0);
+}
+/* Stableford: two points for a nett par. */
+function points(gross,par,si,hcp){
+  if(!gross) return 0;
+  return Math.max(0, par + received(si,hcp) + 2 - gross);
+}
+
+async function load(){
+  S.courses = await Store.get('cl:courses') || {};
+  let filled=0;
+  Object.values(S.courses).forEach(c=>{
+    if(!Array.isArray(c.tees) || !c.tees.length) c.tees=DEFAULT_TEES.slice();
+    c.holes.forEach(migrate);
+    /* An empty Heidelberg from before the built-in data existed — fill it in. */
+    if(/heidelberg/i.test(c.name||'') && c.holes.every(h=>!h.path || h.path.length<2)){
+      applyHeidelberg(c); filled++;
+    }
+  });
+  if(filled){ await save(); setTimeout(()=>toast('Heidelberg lines, card and plans loaded'),600); }
+  S.round   = await Store.get('cl:round')   || null;
+  if(S.round) S.round.holes.forEach(migrate);
+  (await Store.get('cl:archive')||[]).forEach(r=>r.holes.forEach(migrate));
+  S.archive = await Store.get('cl:archive') || [];
+  S.tee     = await Store.get('cl:tee')     || '';
+  S.bag     = await Store.get('cl:bag')     || DEFAULT_BAG.map(c=>({...c}));
+  const hc  = await Store.get('cl:hcp'); S.hcp = (hc===null||hc===undefined)?13:hc;
+  const ra  = await Store.get('cl:routine'); S.routineAuto = (ra===null||ra===undefined)?true:ra;
+  if(!Object.keys(S.courses).length){
+    const c=seedCourse('Heidelberg GC', HEIDELBERG, HGC_CARD);
+    S.courses[c.id]=c;
+    await save();
+  }
+}
+async function save(){
+  await Store.set('cl:courses',S.courses);
+  await Store.set('cl:round',S.round);
+  await Store.set('cl:archive',S.archive);
+  await Store.set('cl:tee',S.tee);
+  await Store.set('cl:bag',S.bag);
+  await Store.set('cl:hcp',S.hcp);
+  await Store.set('cl:routine',S.routineAuto);
+}
+
+function openCTS(){ document.getElementById('cts').classList.add('on'); window.scrollTo(0,0); }
+/* Tags the shot you have just logged — the one you are about to hit. */
+async function markRoutine(ran){
+  const h = S.round ? CH() : null;
+  if(h && h.shots.length) h.shots[h.shots.length-1].prep = ran;
+  closeCTS();
+  if(h){ await save(); render(); }
+}
+function closeCTS(){ document.getElementById('cts').classList.remove('on'); }
+async function geoCheck(){
+  const e=geoEnv(), out=document.getElementById('geoout');
+  let perm='unknown';
+  try{ if(navigator.permissions){ const r=await navigator.permissions.query({name:'geolocation'}); perm=r.state; } }catch(x){}
+  const line=(k,v,ok)=>`<div class="shot-top"><span class="shot-club" style="flex:1">${k}</span>
+    <span class="shot-acc" style="color:${ok===false?'var(--red)':'var(--ink)'}">${v}</span></div>`;
+  out.innerHTML=`<div class="block">
+    ${line('Served over', e.proto, e.proto==='https:'||location.hostname==='localhost')}
+    ${NO_ORIGIN.includes(e.proto)?`<div class="note" style="color:var(--red);margin:6px 0 0">
+      Opened as a local file, so there is no origin to grant permission to. Location cannot work
+      here no matter what you change in settings. It needs an https address.</div>`:''}
+    ${line('Secure context', e.secure?'yes':'no', e.secure)}
+    ${line('In a frame', e.framed?'yes':'no', !e.framed)}
+    ${line('Geolocation API', e.api?'present':'missing', e.api)}
+    ${line('Permission', perm, perm!=='denied')}
+    <div class="note" style="margin-top:8px">Testing a real fix…</div></div>`;
+  const p=await capture();
+  out.innerHTML=out.innerHTML.replace('Testing a real fix…',
+    p ? '<b>Fix acquired</b> — accuracy \u00b1'+p.acc+' m. Logging will work here.'
+      : '<b style="color:var(--red)">No fix.</b> '+esc(GEO_WHY));
+}
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._x); t._x=setTimeout(()=>t.classList.remove('on'),1900); }
+const go = s => { S.screen=s; render(); window.scrollTo(0,0); };
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ============================================================
+   ROUND HELPERS
+   ============================================================ */
+const CH = ()=> S.round.holes[S.hi];
+const holeScore = h => h.shots.length + h.putts.length + h.penalties;
+
+/* landing point of shot i = position of the next recorded ball location */
+function landingOf(h,i){
+  for(let j=i+1;j<h.shots.length;j++) if(h.shots[j].pos) return h.shots[j].pos;
+  return h.greenPos || null;
+}
+function shotDev(h,i){
+  const s=h.shots[i]; if(!s) return null;
+  const L=landingOf(h,i);
+  const out={run:null, off:null, aimLat:null, aimLon:null, aimName:'', src:null};
+  if(s.estLat!==null && s.estLat!==undefined){ out.aimLat=s.estLat; out.src='est'; }
+  if(!s.pos || !L) return (out.src||out.off!==null) ? out : null;
+  out.run = dist(s.pos,L);
+  const path=h.path;
+  if(path && path.length>=2){
+    const nr=onPath(L,path); if(nr) out.off=nr.off;
+    if(s.target!=='off'){
+      const a=aimFor(s.pos,path,clubDist(s.club));
+      if(a){ const o=offPoint(L,s.pos,a.pt);
+        if(o){ out.aimLat=o.lat; out.aimLon=o.lon; out.aimName=a.name; out.src='gps'; } }
+    }
+  }
+  if(!out.src && (s.estLat!==null&&s.estLat!==undefined)) out.src='est';
+  return out;
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render(){
+  const app=document.getElementById('app'), foot=document.getElementById('foot');
+  document.getElementById('mastsub').innerHTML = S.round
+    ? esc(S.round.courseName)+'<br>'+esc(S.round.date)+
+      (S.screen==='round' ? '<br>'+S.round.holes.reduce((t,x)=>t+points(holeScore(x),x.par,x.si,
+         S.round.hcp===undefined?S.hcp:S.round.hcp),0)+' pts' : '')
+    : 'Dispersion&nbsp;log';
+  ({home:vHome,courses:vCourses,course:vCourse,hole:vHole,round:vRound,export:vExport,bag:vBag}[S.screen])(app,foot);
+}
+
+/* ---------- home ---------- */
+function startBlock(){
+  const cs=Object.values(S.courses);
+  const cur=S.courses[S.cid] || cs[0];
+  const tees=(cur && cur.tees && cur.tees.length) ? cur.tees : DEFAULT_TEES;
+  if(!tees.includes(S.tee)) S.tee=tees[0];
+  return `
+    <label class="lbl">Course</label>
+    <div class="chips">${cs.map(c=>`<button class="chip" aria-pressed="${!!cur && c.id===cur.id}"
+      onclick="pickCourse('${c.id}')">${esc(c.name)}</button>`).join('')}
+      <button class="chip" onclick="go('courses')">+ Add</button></div>
+    <label class="lbl">Tees</label>
+    <div class="chips">${tees.map(t=>`<button class="chip" aria-pressed="${S.tee===t}"
+      onclick="pickTee('${esc(t)}')">${esc(t)}</button>`).join('')}</div>
+    <label class="lbl">Handicap</label>
+    <input type="number" inputmode="numeric" value="${S.hcp}" onchange="setHcp(this.value)">
+    <button class="btn solid" style="margin-top:12px" onclick="newRound()">New round</button>`;
+}
+async function toggleRoutine(){ S.routineAuto=!S.routineAuto; await save(); render();
+  toast('Routine prompt '+(S.routineAuto?'on':'off')); }
+async function pickCourse(id){ S.cid=id; const c=S.courses[id];
+  if(c && c.tees && !c.tees.includes(S.tee)) S.tee=c.tees[0];
+  await save(); render(); }
+async function pickTee(t){ S.tee=t; await save(); render(); }
+async function setHcp(v){ S.hcp=Math.max(0,Math.min(54,parseInt(v,10)||0)); await save(); render(); }
+
+function vHome(app,foot){
+  const n=Object.keys(S.courses).length;
+  app.innerHTML = `
+    <div class="eyebrow"><b>Start</b><span class="fill">${S.round?'Round in progress':'No active round'}</span></div>
+    ${S.round ? `<button class="btn solid" onclick="resume()">Resume round<span class="rt">${S.round.holes.filter(h=>h.shots.length||h.putts.length).length}/18 played</span></button>
+                 <button class="btn danger" onclick="finishRound()">Finish and file round</button>`
+              : startBlock()}
+    <div class="eyebrow"><b>Setup</b></div>
+    <button class="btn" onclick="go('courses')">Courses<span class="rt">${n}</span></button>
+    <button class="btn" onclick="go('bag')">Bag<span class="rt">${S.bag.length} clubs</span></button>
+    <button class="btn" onclick="toggleRoutine()">Shot routine prompt<span class="rt">${S.routineAuto?'on':'off'}</span></button>
+    <button class="btn" onclick="go('export')">Export data<span class="rt">${S.archive.length} filed</span></button>
+    <button class="btn" onclick="geoCheck()">Location check</button>
+    <div id="geoout"></div>
+    <div class="eyebrow"><b>How it works</b></div>
+    <div class="block note">
+      Stand at your ball, pick the club, tap <b>Log shot from here</b>. That fix is where the
+      previous shot finished — so each ball position is recorded once and every shot gets a
+      landing point for free.<br><br>
+      Mark the centreline and green for each hole under Courses first. Do it once per course.
+    </div>`;
+  foot.innerHTML='';
+}
+
+/* ---------- bag ---------- */
+function vBag(app,foot){
+  app.innerHTML = `
+    <div class="eyebrow"><b>Bag</b><span class="fill">Expected total, metres</span></div>
+    <div class="block note">These distances decide what each shot was aimed at: the point on the
+      hole's line that sits this far from your ball. Carry plus roll, on grass &mdash; not simulator
+      carry. Seeded from your gapping session, so check them against a few real rounds.</div>
+    <div class="block flush">${S.bag.map((c,i)=>`
+      <div class="shot"><div class="shot-top">
+        <span class="shot-club" style="flex:1.4">${esc(c.club)}</span>
+        <input type="number" inputmode="numeric" value="${c.d||''}" style="width:96px;min-height:40px;text-align:right"
+               onchange="setDist(${i},this.value)">
+        <span class="shot-acc" style="width:44px;text-align:right">${
+          i<S.bag.length-1 && c.d && S.bag[i+1].d ? '\u2212'+(c.d-S.bag[i+1].d) : 'm'}</span>
+        <span class="putt x" onclick="delClub(${i})">&times;</span>
+      </div></div>`).join('')}</div>
+    <label class="lbl">Add a club</label>
+    <div class="row">
+      <input type="text" id="nc" placeholder="name">
+      <input type="number" id="nd" placeholder="metres" style="max-width:120px">
+    </div>
+    <button class="btn ghost" style="margin-top:8px" onclick="addClub()">Add to bag</button>
+    <button class="btn ghost danger" onclick="resetBag()">Reset to the built-in distances</button>`;
+  foot.innerHTML=`<button class="btn nar" onclick="go('home')">&larr;</button>`;
+}
+async function setDist(i,v){
+  S.bag[i].d=Math.max(0,parseInt(v,10)||0);
+  S.bag.sort((a,b)=>b.d-a.d);          // longest first, so the chips read in gapping order
+  await save(); render();
+}
+async function delClub(i){ S.bag.splice(i,1); await save(); render(); }
+async function addClub(){
+  const n=document.getElementById('nc').value.trim(), d=parseInt(document.getElementById('nd').value,10);
+  if(!n){ toast('Give the club a name'); return; }
+  S.bag.push({club:n, d:isFinite(d)?d:0});
+  S.bag.sort((a,b)=>b.d-a.d); await save(); render();
+}
+async function resetBag(){ if(!confirm('Reset every club distance?')) return;
+  S.bag=DEFAULT_BAG.map(c=>({...c})); await save(); render(); }
+
+/* ---------- course list ---------- */
+function vCourses(app,foot){
+  app.innerHTML = `<div class="eyebrow"><b>Courses</b></div>` +
+    Object.values(S.courses).map(c=>{
+      const done=c.holes.filter(h=>h.path.length>=2).length;
+      return `<button class="btn" onclick="openCourse('${c.id}')">${esc(c.name)}<span class="rt">${done}/18 lined</span></button>`;
+    }).join('') +
+    `<button class="btn ghost" onclick="addCourse()">+ Add course</button>`;
+  foot.innerHTML=`<button class="btn nar" onclick="go('home')">&larr;</button>`;
+}
+
+/* ---------- one course ---------- */
+function vCourse(app,foot){
+  const c=S.courses[S.cid];
+  app.innerHTML = `
+    <div class="eyebrow"><b>${esc(c.name)}</b><span class="fill">Tap a hole to mark it</span></div>
+    <div class="hgrid">${c.holes.map(h=>{
+      const ok=h.path.length>=2;
+      return `<button class="hcell ${ok?'done':''}" onclick="openHole(${h.n-1})">
+        <div class="n">${h.n}</div>
+        <div class="m">Par ${h.par} &middot; SI ${h.si}${h.cardM?'<br>'+h.cardM+' m':''}</div>
+        <div class="st ${ok?'':'no'}">${ok?h.path.length+' PTS':(h.path.length?'1 PT':'—')}</div>
+      </button>`;}).join('')}</div>
+    <div class="eyebrow"><b>Course</b></div>
+    <label class="lbl">Name</label>
+    <input type="text" value="${esc(c.name)}" onchange="c_name(this.value)">
+    <label class="lbl">Tees at this course</label>
+    <input type="text" value="${esc((c.tees||[]).join(', '))}" placeholder="White, Blue, Black"
+           onchange="setTees(this.value)">
+    <div class="note" style="margin:4px 0 0">Comma separated, in any order you like. Which tee you
+      play does not change the lines or the lateral figures &mdash; only how far you hit it.</div>
+    <label class="lbl">Import points</label>
+    <div class="note" style="margin-bottom:6px">Draw one <b>path</b> per hole in Google Earth, tee end
+      to green, name each one with its hole number, then save the folder as KML and paste the whole
+      file here. Or type points by hand: <b>hole&nbsp;point&nbsp;lat&nbsp;lng</b>, numbered from the
+      tee end. Either way this replaces the line for every hole it finds.</div>
+    <textarea id="imp" placeholder="1 1 -37.74001 145.10002
+1 2 -37.73820 145.10011
+1 3 -37.73700 145.10025"></textarea>
+    <button class="btn ghost" style="margin-top:8px" onclick="importGeo(document.getElementById('imp').value)">Import points</button>
+    <button class="btn ghost" style="margin-top:2px" onclick="dumpGeo()">Copy this course's points</button>
+    <button class="btn ghost" style="margin-top:2px" onclick="loadHeidelberg()">Restore the built-in Heidelberg course</button>
+    <div class="note" style="margin-top:4px">Lines, card and hole plans together. Overwrites whatever is here.</div>
+    <button class="btn ghost danger" style="margin-top:10px" onclick="delCourse()">Delete course</button>`;
+  foot.innerHTML=`<button class="btn nar" onclick="go('courses')">&larr;</button>`;
+}
+
+/* ---------- hole setup ---------- */
+function vHole(app,foot){
+  const c=S.courses[S.cid], h=c.holes[S.hsetup];
+  const st=stations(h.path), total=st[st.length-1]||0;
+  const rows = h.path.map((v,i)=>{
+    const last=i===h.path.length-1;
+    return `<div class="shot">
+      <div class="shot-top">
+        <span class="shot-seq">${i+1}</span>
+        <span class="shot-club">${i===0?'Start of line':(last?'Green centre':'Bend / aim point')}</span>
+        <span class="shot-acc">${i?Math.round(st[i])+' m':''} ${v.src==='map'?'map':'gps'}</span>
+        <span class="putt x" onclick="delVertex(${i})">&times;</span>
+      </div>
+      <input type="text" style="margin-top:6px" value="${v.lat.toFixed(6)}, ${v.lng.toFixed(6)}"
+             onchange="editVertex(${i},this.value)">
+    </div>`;}).join('') || `<div class="shot"><div class="pending">No line drawn for this hole.</div></div>`;
+
+  app.innerHTML = `
+    <div class="holehead">
+      <div class="holenum">${h.n}</div>
+      <div class="holemeta">Par <b>${h.par}</b> &middot; SI <b>${h.si}</b><br>
+        ${h.cardM?'Card '+h.cardM+' m &middot; ':''}line ${Math.round(total)} m over ${h.path.length} pts${
+          h.cardM&&total?' &middot; starts '+Math.round(h.cardM-total)+' m up':''}</div>
+      <div class="holescore"><div class="k">Line</div><div class="n">${h.path.length>=2?'OK':'—'}</div></div>
+    </div>
+    <div class="eyebrow"><b>The line</b><span class="fill">Tee end first, green last</span></div>
+    <div class="block note">
+      Points run from the tee end down to the green centre. Put one at each bend so the line follows
+      the fairway rather than cutting across it. Two points is the minimum; three or four covers most
+      doglegs.<br><br>
+      Never anchor the first point on a tee box &mdash; put it in the middle of the fairway. The line
+      then reads the same off every tee.</div>
+    <div class="block flush">${rows}</div>
+    <label class="lbl">Add a point</label>
+    <input type="text" id="newv" placeholder="paste  -37.74001, 145.10002">
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost" onclick="addVertex(document.getElementById('newv').value)">Add from coordinates</button>
+      <button class="btn ghost" onclick="addVertex(null)">Add from here</button>
+    </div>
+    ${h.path.length>=2?`<button class="btn ghost" onclick="reversePath()">Reverse the line</button>
+      <div class="note" style="margin-bottom:10px">Use this if left and right come out backwards.
+      I cannot detect the direction for you &mdash; there is no tee reference in the line.</div>`:''}
+    <div class="eyebrow"><b>Plan</b><span class="fill">Shown while you play</span></div>
+    <textarea style="min-height:96px" onchange="setPlan(this.value)"
+      placeholder="How you intend to play it. Club off the tee, what you are avoiding, where the miss should be, where not to be short."
+      >${esc(h.plan||'')}</textarea>
+    <div class="eyebrow"><b>Card</b></div>
+    <label class="lbl">Par</label>
+    <div class="step"><button onclick="hset('par',-1)">&minus;</button><span>${h.par}</span><button onclick="hset('par',1)">+</button></div>
+    <label class="lbl">Stroke index</label>
+    <div class="step"><button onclick="hset('si',-1)">&minus;</button><span>${h.si}</span><button onclick="hset('si',1)">+</button></div>`;
+  foot.innerHTML=`
+    <button class="btn nar" onclick="go('course')">&larr;</button>
+    <button class="btn nar" onclick="navSetup(-1)">Prev</button>
+    <button class="btn solid" onclick="navSetup(1)">Next hole</button>`;
+}
+const curHole = ()=> S.courses[S.cid].holes[S.hsetup];
+async function addVertex(v){
+  let p;
+  if(v===null){ p=await capture(); if(!p){ toast(GEO_WHY||'No fix'); return; } }
+  else { p=parseLL(v); if(!p){ toast('Need two decimal coordinates, latitude first'); return; } }
+  curHole().path.push(p); await save(); render();
+}
+async function editVertex(i,v){
+  const p=parseLL(v); if(!p){ toast('Could not read those coordinates'); render(); return; }
+  curHole().path[i]=p; await save(); render();
+}
+async function delVertex(i){ curHole().path.splice(i,1); await save(); render(); }
+async function setPlan(v){ curHole().plan=v; await save(); }
+async function reversePath(){ curHole().path.reverse(); await save(); render(); toast('Line reversed'); }
+
+/* ---------- plan view: the hole line, your ball positions, drawn to scale ---------- */
+function svgHole(h){
+  const path=h.path;
+  if(!path || path.length<2) return '<div class="block note">No line drawn for this hole.</div>';
+  const o=path[0];
+  const balls=h.shots.filter(x=>x.pos).map(x=>x.pos).concat(h.greenPos?[h.greenPos]:[]);
+  const E=proj(path[path.length-1],o), Lm=Math.hypot(E.x,E.y);
+  if(Lm<5) return '<div class="block note">Line too short to draw.</div>';
+  const cb=E.y/Lm, sb=E.x/Lm;                    // cos/sin of the line's bearing
+  const rot=q=>{ const m=proj(q,o); return {x:m.x*cb - m.y*sb, y:m.x*sb + m.y*cb}; };
+  const P=path.map(rot), B=balls.map(rot);
+  const all=P.concat(B);
+  let x0=Math.min(...all.map(p=>p.x)), x1=Math.max(...all.map(p=>p.x));
+  let y0=Math.min(...all.map(p=>p.y)), y1=Math.max(...all.map(p=>p.y));
+  const padM=15; x0-=padM; x1+=padM; y0-=padM; y1+=padM;
+  if(x1-x0 < 60){ const c=(x0+x1)/2; x0=c-30; x1=c+30; }
+  const wM=x1-x0, hM=y1-y0;
+  const MAXW=280, MAXH=400, LBL=30;                    // LBL leaves room for tick labels
+  const sc=Math.min(MAXW/wM, MAXH/hM);
+  const W=wM*sc, H=hM*sc, VW=W+LBL, VH=H+16;
+  const sx=p=>((p.x-x0)*sc).toFixed(1), sy=p=>(H-(p.y-y0)*sc).toFixed(1);
+  const line=P.map(p=>sx(p)+','+sy(p)).join(' ');
+  const gp=P[P.length-1];
+
+  /* 50 m ticks along the line */
+  const st=stations(path); let ticks='';
+  for(let d=50; d<st[st.length-1]; d+=50){
+    let seg=0; while(seg<st.length-2 && st[seg+1]<d) seg++;
+    const f=(d-st[seg])/(st[seg+1]-st[seg]);
+    const tx=P[seg].x+f*(P[seg+1].x-P[seg].x), ty=P[seg].y+f*(P[seg+1].y-P[seg].y);
+    const X=((tx-x0)*sc).toFixed(1), Y=(H-(ty-y0)*sc).toFixed(1);
+    ticks+=`<line x1="${X-5}" y1="${Y}" x2="${+X+5}" y2="${Y}" stroke="var(--rule)" stroke-width="1"/>
+            <text x="${+X+9}" y="${+Y+3}" font-size="8" fill="var(--ink-2)" font-family="monospace">${d}</text>`;
+  }
+  let walk='', dots='';
+  B.forEach((p,i)=>{
+    if(i) walk+=`<line x1="${sx(B[i-1])}" y1="${sy(B[i-1])}" x2="${sx(p)}" y2="${sy(p)}"
+                   stroke="var(--red)" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+    const onGreen = h.greenPos && i===B.length-1;
+    dots+=`<circle cx="${sx(p)}" cy="${sy(p)}" r="${onGreen?5:4}" fill="${onGreen?'var(--red)':'var(--paper)'}"
+             stroke="var(--red)" stroke-width="1.5"/>
+           <text x="${(+sx(p)+(onGreen?-14:8)).toFixed(1)}" y="${(+sy(p)+3).toFixed(1)}" font-size="9"
+             font-family="monospace" fill="var(--ink)">${onGreen?'G':(i+1)}</text>`;
+  });
+  const bar=50*sc;
+  return `<svg viewBox="0 0 ${VW.toFixed(1)} ${VH.toFixed(1)}" width="${VW.toFixed(0)}" height="${VH.toFixed(0)}"
+    style="max-width:100%;height:auto;display:block;margin:0 auto">
+    <polyline points="${line}" fill="none" stroke="var(--ink)" stroke-width="2"/>
+    ${P.slice(1,-1).map(p=>`<rect x="${+sx(p)-2.5}" y="${+sy(p)-2.5}" width="5" height="5" fill="var(--ink)"/>`).join('')}
+    ${ticks}
+    <circle cx="${sx(gp)}" cy="${sy(gp)}" r="9" fill="none" stroke="var(--ink)" stroke-width="1.5"/>
+    <circle cx="${sx(gp)}" cy="${sy(gp)}" r="2" fill="var(--ink)"/>
+    ${walk}${dots}
+    <line x1="6" y1="${H+8}" x2="${(6+bar).toFixed(1)}" y2="${H+8}" stroke="var(--ink-2)" stroke-width="1.5"/>
+    <text x="${(10+bar).toFixed(1)}" y="${H+11}" font-size="8" fill="var(--ink-2)" font-family="monospace">50 m</text>
+  </svg>`;
+}
+
+/* ---------- round ---------- */
+function vRound(app,foot){
+  const h=CH(), r=S.round;
+  const sc=holeScore(h), rel=sc-h.par;
+  const geo = h.path.length>=2 ? '' : ' &middot; no line drawn';
+  const hcp = r.hcp===undefined?S.hcp:r.hcp;
+  const rx  = received(h.si,hcp);
+  const pts = points(sc,h.par,h.si,hcp);
+  const runPts = r.holes.reduce((t,x)=>t+points(holeScore(x),x.par,x.si,hcp),0);
+
+  /* shots */
+  const shots = h.shots.map((s,i)=>{
+    const d=shotDev(h,i);
+    const val = d ? (d.aimLat!=null ? d.aimLat : d.off) : null;
+    const kind = d && d.aimLat!=null ? (d.src==='est'?'estimated':('off aim at '+(d.aimName||'target'))) : 'off the line';
+    let gauge='';
+    if(val!=null){
+      const side=val>0?'L':'R', m=Math.abs(val);
+      const pc=Math.max(2,Math.min(98, 50 - (val/GAUGE_RANGE)*50));
+      gauge=`<div class="gauge">
+        <div class="track"></div>
+        <div class="tick" style="left:25%"></div><div class="tick" style="left:75%"></div>
+        <div class="zero"></div>
+        <div class="pin ${side} ${d.src==='est'?'est':''}" style="left:${pc}%"></div>
+        <div class="val ${side}">${d.src==='est'?'~':''}${m.toFixed(0)} m ${side}${d.aimLon!=null?(d.aimLon>=0?' / '+d.aimLon.toFixed(0)+' long':' / '+Math.abs(d.aimLon).toFixed(0)+' short'):''}</div>
+        <div class="ends"><span>${GAUGE_RANGE}L</span><span>${GAUGE_RANGE}R</span></div>
+      </div>
+      <div class="pending">${kind}${d.off!=null&&d.aimLat!=null?' \u00b7 finished '+Math.abs(d.off).toFixed(0)+' m '+(d.off>0?'left':'right')+' of the line':''}</div>`;
+    } else if(d && d.run!=null){ gauge=`<div class="pending">No line drawn for this hole</div>`; }
+    else { gauge=`<div class="pending">${s.pos?'Awaiting next ball position':'No fix \u2014 tap the club to estimate the miss'}</div>`; }
+    const ed = S.edit===i ? `
+      <div style="margin-top:8px">
+        <label class="lbl">Estimated miss, metres from the target line</label>
+        <input type="number" inputmode="decimal" step="1" id="estv"
+               value="${s.estLat!=null?Math.abs(s.estLat):''}">
+        <div class="chips two" style="margin-top:6px">
+          <button class="chip" onclick="setEst(${i},'L')">Save as left</button>
+          <button class="chip" onclick="setEst(${i},'R')">Save as right</button>
+        </div>
+        <button class="btn ghost" onclick="clearEst(${i})">Clear estimate</button>
+      </div>` : '';
+    return `<div class="shot">
+      <div class="shot-top">
+        <span class="shot-seq">${i+1}</span>
+        <span class="shot-club" onclick="S.edit=(S.edit===${i}?null:${i});render()">${esc(s.club)}</span>
+        <span class="shot-tag">${s.target==='off'?'off plan':'on the line'}</span>
+        <span class="shot-acc">${s.prep===true?'\u2713 ':(s.prep===false?'\u2717 ':'')}${s.pos?('\u00b1'+s.pos.acc):'no fix'}</span>
+        <span class="putt x" onclick="delShot(${i})">&times;</span>
+      </div>${gauge}
+      ${d&&d.run!=null?`<div class="pending">Shot ran ${d.run.toFixed(0)} m</div>`:''}${ed}
+    </div>`;
+  }).join('') || `<div class="shot"><div class="pending">No shots logged.</div></div>`;
+
+  /* putts */
+  const putts = h.putts.map((p,i)=>{
+    const errs=[p.prep&&'prep',p.read&&('read '+p.read),p.speed&&('speed '+p.speed),p.stroke&&(p.stroke),p.mental&&'mental'].filter(Boolean);
+    return `<div class="putt"><div class="p1">
+        <span class="len">${p.len} m</span>
+        <span class="res ${p.dist==='Made'?'made':''}">${p.dist}${p.dist==='Made'?'':' / '+p.line}</span>
+        <span class="shot-acc">${p.level}</span>
+        <span class="x" onclick="delPutt(${i})">&times;</span>
+      </div>${errs.length?`<div class="errs">${errs.join(' &middot; ')}</div>`:''}</div>`;
+  }).join('') || `<div class="putt"><span class="shot-acc">No putts logged.</span></div>`;
+
+  app.innerHTML = `
+    <div class="holehead">
+      <div class="holenum">${h.n}</div>
+      <div class="holemeta">Par <b>${h.par}</b> &middot; SI <b>${h.si}</b>${
+        rx?' &middot; <b>'+rx+' shot'+(rx>1?'s':'')+'</b>':''}${h.cardM?' &middot; '+h.cardM+' m':''}${geo}<br>
+        ${h.shots.length} shots &middot; ${h.putts.length} putts${h.penalties?' &middot; '+h.penalties+' pen':''}${h.sand?' &middot; '+h.sand+' sand':''}</div>
+      <div class="holescore"><div class="k">Score</div><div class="n">${sc||'—'}</div>
+        <div class="k">${sc?((rel===0?'level':(rel>0?'+'+rel:rel))+' &middot; '+pts+' pt'+(pts===1?'':'s')):''}</div></div>
+    </div>
+
+    <div class="eyebrow"><b>Plan</b><span class="fill">${S.editPlan?'saves to the course':'tap to edit'}</span></div>
+    ${S.editPlan
+      ? `<textarea id="planbox" style="min-height:104px"
+           placeholder="How you intend to play it. Club off the tee, what you are avoiding, where the miss should be.">${esc(h.plan||'')}</textarea>
+         <div class="row" style="margin:8px 0 10px">
+           <button class="btn solid" onclick="savePlan()">Save to the course</button>
+           <button class="btn ghost" style="flex:0 0 90px" onclick="S.editPlan=false;render()">Cancel</button>
+         </div>`
+      : `<div class="block note" style="border-left:3px solid var(--ink);cursor:pointer"
+           onclick="S.editPlan=true;render()">${h.plan
+             ? esc(h.plan).replace(/\n/g,'<br>')
+             : '<span style="opacity:.6">No plan written for this hole yet. Tap to add one.</span>'}</div>`}
+    <div class="eyebrow"><b>Hole</b><span class="fill">${toGreen(h)}</span></div>
+    <div class="block">${svgHole(h)}</div>
+
+    <div class="eyebrow"><b>Shots</b><span class="fill">Log where you stand</span></div>
+    <div class="block flush">${shots}</div>
+    <div class="chips grid">${S.bag.map(c=>`<button class="chip" aria-pressed="${S.pick===c.club}" onclick="pickClub('${esc(c.club)}')">${esc(c.club)}<br><span style="font-size:9px;opacity:.55">${c.d||'?'}</span></button>`).join('')}
+      <button class="chip" aria-pressed="${S.pick==='Other'}" onclick="pickClub('Other')">Other</button></div>
+    <div class="chips two">
+      <button class="chip" aria-pressed="${S.tgt!=='off'}" onclick="S.tgt='on';render()">Playing the line</button>
+      <button class="chip" aria-pressed="${S.tgt==='off'}" onclick="S.tgt='off';render()">Off plan</button>
+    </div>
+    <button class="btn ghost" onclick="openCTS()">Show C&middot;T&middot;S</button>
+    <button class="btn solid" onclick="logShot()">Log shot from here${S.pick?' &mdash; '+esc(S.pick):''}</button>
+    <button class="btn ghost" onclick="logShot(true)">Log without a fix</button>
+
+    <div class="eyebrow"><b>Green</b><span class="fill">${h.greenPos?'\u00b1'+h.greenPos.acc+' m':'ball not marked'}</span></div>
+    <button class="btn ghost" onclick="markBall()">${h.greenPos?'Re-mark ball on green':'Mark ball on green'}</button>
+    <div class="note" style="margin-bottom:10px">This fix is the landing point of your approach. It sets the direction of the miss; the first putt length below is the accurate proximity.</div>
+
+    <div class="eyebrow"><b>Putts</b></div>
+    <div class="block flush">${putts}</div>
+    <button class="btn ghost" onclick="openPutt()">+ Add putt</button>
+    <div id="puttform"></div>
+
+    <div class="eyebrow"><b>Hole</b></div>
+    <label class="lbl">Penalty strokes</label>
+    <div class="step"><button onclick="hadj('penalties',-1)">&minus;</button><span>${h.penalties}</span><button onclick="hadj('penalties',1)">+</button></div>
+    <label class="lbl">Bunker shots played</label>
+    <div class="step"><button onclick="hadj('sand',-1)">&minus;</button><span>${h.sand}</span><button onclick="hadj('sand',1)">+</button></div>
+    <label class="lbl">Note</label>
+    <textarea onchange="hnote(this.value)" placeholder="Wind, lie, decision, anything worth remembering.">${esc(h.note)}</textarea>`;
+
+  foot.innerHTML=`
+    <button class="btn nar" onclick="go('home')">&equiv;</button>
+    <button class="btn nar" onclick="navHole(-1)">&larr;</button>
+    ${h.n<18 ? `<button class="btn solid" onclick="navHole(1)">Hole ${h.n+1} &rarr;</button>`
+              : `<button class="btn solid" onclick="finishRound()">File round</button>`}`;
+}
+
+function toGreen(h){
+  if(!h.path||h.path.length<2) return '';
+  const balls=h.shots.filter(x=>x.pos);
+  const from = h.greenPos || (balls.length?balls[balls.length-1].pos:null);
+  if(!from) return 'green at the ring';
+  const d=dist(from, h.path[h.path.length-1]);
+  return d==null?'':Math.round(d)+' m to green centre';
+}
+
+/* ---------- putt form ---------- */
+let PF=null;
+function openPutt(){ PF={len:'',level:'Flat',dist:'Made',line:'On',prep:false,read:'',speed:'',stroke:'',mental:false,note:''}; drawPutt(); }
+function pfs(k,v){ PF[k]=v; drawPutt(); }              /* always has a value */
+function pf(k,v){ PF[k]= PF[k]===v?'':v; drawPutt(); }  /* tap again to clear */
+function pfb(k){ PF[k]=!PF[k]; drawPutt(); }
+function drawPutt(){
+  const el=document.getElementById('puttform'); if(!PF){el.innerHTML='';return;}
+  const set=(k,arr)=>`<div class="chips four">${arr.map(o=>`<button class="chip" aria-pressed="${PF[k]===o}" onclick="pfs('${k}','${o}')">${o}</button>`).join('')}</div>`;
+  el.innerHTML=`
+    <div class="block">
+      <label class="lbl">Length (metres)</label>
+      <input type="number" inputmode="decimal" step="0.5" value="${PF.len}" oninput="PF.len=this.value">
+      <label class="lbl">Level</label>${set('level',['Up','Down','Sidehill','Flat'])}
+      <label class="lbl">Distance</label>${set('dist',['Made','Short','Past'])}
+      <label class="lbl">Line</label>${set('line',['On','High','Low'])}
+      <label class="lbl">Errors — tap any that applied</label>
+      <div class="chips">
+        <button class="chip" aria-pressed="${PF.prep}" onclick="pfb('prep')">Prep</button>
+        <button class="chip" aria-pressed="${PF.read==='over'}" onclick="pf('read','over')">Read over</button>
+        <button class="chip" aria-pressed="${PF.read==='under'}" onclick="pf('read','under')">Read under</button>
+        <button class="chip" aria-pressed="${PF.speed==='fast'}" onclick="pf('speed','fast')">Speed fast</button>
+        <button class="chip" aria-pressed="${PF.speed==='slow'}" onclick="pf('speed','slow')">Speed slow</button>
+        <button class="chip" aria-pressed="${PF.stroke==='face'}" onclick="pf('stroke','face')">Face</button>
+        <button class="chip" aria-pressed="${PF.stroke==='path'}" onclick="pf('stroke','path')">Path</button>
+        <button class="chip" aria-pressed="${PF.mental}" onclick="pfb('mental')">Mental</button>
+      </div>
+      <label class="lbl">Note</label>
+      <input type="text" value="${esc(PF.note)}" oninput="PF.note=this.value">
+      <div class="row" style="margin-top:12px">
+        <button class="btn solid" onclick="savePutt()">Save putt</button>
+        <button class="btn ghost nar" style="flex:0 0 90px" onclick="PF=null;drawPutt()">Cancel</button>
+      </div>
+    </div>`;
+}
+async function savePutt(){
+  if(PF.len===''){ toast('Enter the putt length'); return; }
+  CH().putts.push({...PF, len:Number(PF.len)});
+  PF=null; await save(); render();
+}
+async function delPutt(i){ CH().putts.splice(i,1); await save(); render(); }
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+function pickClub(c){ S.pick = S.pick===c?null:c; render(); }
+
+async function logShot(noFix){
+  if(!S.pick){ toast('Pick a club first'); return; }
+  const pos = noFix ? null : await capture();
+  if(!noFix && !pos){ toast(GEO_WHY||'No fix — shot not logged'); return; }
+  CH().shots.push({club:S.pick, target:S.tgt==='off'?'off':'on', pos, estLat:null, prep:null});
+  await save(); render();
+  if(S.routineAuto) openCTS();
+}
+async function setEst(i,side){
+  const v=parseFloat(document.getElementById('estv').value);
+  if(!isFinite(v)){ toast('Enter a distance in metres'); return; }
+  CH().shots[i].estLat = side==='L' ? Math.abs(v) : -Math.abs(v);
+  S.edit=null; await save(); render();
+}
+async function clearEst(i){ CH().shots[i].estLat=null; S.edit=null; await save(); render(); }
+async function delShot(i){ CH().shots.splice(i,1); await save(); render(); }
+async function markBall(){ const p=await capture(); if(p){ CH().greenPos=p; await save(); render(); } }
+
+async function hadj(k,d){ const h=CH(); h[k]=Math.max(0,h[k]+d); await save(); render(); }
+async function hnote(v){ CH().note=v; await save(); }
+/* The plan belongs to the course, so an edit made mid-round persists to every future round. */
+async function savePlan(){
+  const v=document.getElementById('planbox').value;
+  const h=CH(); h.plan=v;
+  const c=S.courses[S.round.courseId];
+  if(c && c.holes[S.hi]) c.holes[S.hi].plan=v;
+  S.editPlan=false; await save(); render();
+  toast(c?'Saved to '+c.name:'Saved for this round only');
+}
+async function navHole(d){ S.hi=Math.max(0,Math.min(17,S.hi+d)); S.pick=null; S.tgt='on'; PF=null; S.edit=null; S.editPlan=false; await save(); render(); window.scrollTo(0,0); }
+
+async function newRound(){
+  const ids=Object.keys(S.courses);
+  const c=S.courses[S.cid&&S.courses[S.cid]?S.cid:ids[0]];
+  if(c.tees && !c.tees.includes(S.tee)) S.tee=c.tees[0];
+  S.round={ id:uid(), courseId:c.id, courseName:c.name, tee:S.tee||'', date:new Date().toISOString().slice(0,10),
+    hcp:S.hcp,
+    holes:c.holes.map(h=>({n:h.n,par:h.par,si:h.si,cardM:h.cardM,plan:h.plan||'',path:h.path.slice(),
+      shots:[],greenPos:null,putts:[],penalties:0,sand:0,note:''})) };
+  S.hi=0; S.pick=null; S.tgt='on';
+  await save(); go('round');
+}
+function resume(){ S.pick=null; S.tgt='on'; go('round'); }
+async function finishRound(){
+  if(!confirm('File this round? It moves to the export list and clears the active round.')) return;
+  S.archive.push(S.round); S.round=null; await save(); go('home'); toast('Round filed');
+}
+
+/* course + hole setup */
+async function addCourse(){ const n=prompt('Course name'); if(!n) return; const id=uid();
+  S.courses[id]={id,name:n,tees:DEFAULT_TEES.slice(),holes:blankHoles()}; S.cid=id; await save(); go('course'); }
+function openCourse(id){ S.cid=id; go('course'); }
+async function setTees(v){
+  const list=v.split(',').map(x=>x.trim()).filter(Boolean);
+  S.courses[S.cid].tees = list.length?list:DEFAULT_TEES.slice();
+  await save(); render();
+}
+async function c_name(v){ S.courses[S.cid].name=v; await save(); }
+async function delCourse(){ if(!confirm('Delete this course and its marked lines?')) return;
+  delete S.courses[S.cid]; S.cid=null; await save(); go('courses'); }
+function openHole(i){ S.hsetup=i; go('hole'); }
+function navSetup(d){ S.hsetup=Math.max(0,Math.min(17,S.hsetup+d)); render(); window.scrollTo(0,0); }
+async function hset(k,d){ const h=S.courses[S.cid].holes[S.hsetup];
+  h[k]=Math.max(1,Math.min(k==='par'?6:18,h[k]+d)); await save(); render(); }
+async function markPt(k){ const p=await capture(); if(!p){ toast(GEO_WHY||'No fix'); return; }
+  S.courses[S.cid].holes[S.hsetup][k]=p; await save(); render(); }
+
+async function importGeo(txt){
+  if(!txt||!txt.trim()){ toast('Paste something first'); return; }
+  const c=S.courses[S.cid]; let holesSet=0; const bad=[];
+  const mk=(lat,lng)=>({lat,lng,acc:null,src:'map',ts:Date.now()});
+  const ok=(lat,lng)=>isFinite(lat)&&isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180;
+
+  if(/<coordinates/i.test(txt)){
+    const doc=new DOMParser().parseFromString(txt,'text/xml');
+    doc.querySelectorAll('Placemark').forEach(pm=>{
+      const nm=(pm.querySelector('name')?.textContent||'').trim();
+      const hm=nm.match(/\d{1,2}/);
+      const raw=(pm.querySelector('coordinates')?.textContent||'').trim();
+      if(!hm || !raw){ bad.push(nm||'(unnamed)'); return; }
+      const hole=+hm[0];
+      if(!(hole>=1&&hole<=18)){ bad.push(nm); return; }
+      const pts=raw.split(/\s+/).filter(Boolean).map(t=>t.split(',')) 
+        .filter(t=>t.length>=2 && ok(parseFloat(t[1]),parseFloat(t[0])))
+        .map(t=>mk(parseFloat(t[1]),parseFloat(t[0])));
+      if(!pts.length){ bad.push(nm); return; }
+      if(pts.length>1){ c.holes[hole-1].path=pts; holesSet++; }
+      else c.holes[hole-1].path.push(pts[0]);
+    });
+  } else {
+    const byHole={};
+    txt.split(/\r?\n/).forEach(line=>{
+      if(!line.trim()) return;
+      const t=line.split(/[\s,;]+/).filter(Boolean);
+      const hole=parseInt(t[0],10);
+      const seq = /^(C1|A)$/i.test(t[1]) ? 1 : /^(C2|B)$/i.test(t[1]) ? 2
+                : /^(G|GREEN)$/i.test(t[1]) ? 99 : parseInt(t[1],10);
+      const lat=parseFloat(t[2]), lng=parseFloat(t[3]);
+      if(!(t.length>=4 && hole>=1 && hole<=18 && isFinite(seq) && ok(lat,lng))){ bad.push(line.trim()); return; }
+      (byHole[hole]=byHole[hole]||[]).push({seq, p:mk(lat,lng)});
+    });
+    Object.entries(byHole).forEach(([hole,list])=>{
+      list.sort((x,y)=>x.seq-y.seq);
+      c.holes[hole-1].path=list.map(x=>x.p); holesSet++;
+    });
+  }
+  await save(); render();
+  toast(holesSet+' hole line(s) imported'+(bad.length?', '+bad.length+' skipped':''));
+  if(bad.length) console.warn('Centreline skipped:', bad);
+}
+function applyHeidelberg(c){
+  const src=seedCourse('x',HEIDELBERG,HGC_CARD);
+  c.holes.forEach((h,i)=>{
+    const t=src.holes[i];
+    h.path=t.path; h.par=t.par; h.si=t.si; h.cardM=t.cardM; h.plan=t.plan;
+  });
+  if(!c.tees || !c.tees.length) c.tees=DEFAULT_TEES.slice();
+  return c;
+}
+async function loadHeidelberg(){
+  if(!confirm('Replace the lines, card and plans on this course with the built-in Heidelberg data?')) return;
+  applyHeidelberg(S.courses[S.cid]);
+  await save(); render(); toast('Heidelberg loaded — 18 lines, par 72, 13 plans');
+}
+async function loadPlans(){
+  const c=S.courses[S.cid];
+  const has=c.holes.filter(h=>h.plan).length;
+  if(has && !confirm('Overwrite the '+has+' plan(s) already written on this course?')) return;
+  c.holes.forEach((h,i)=>{ h.plan=HGC_PLANS[i]||''; });
+  await save(); render(); toast(HGC_PLANS.filter(Boolean).length+' plans loaded');
+}
+async function loadCard(){
+  if(!confirm('Overwrite par and stroke index on all 18 holes with the Heidelberg card?')) return;
+  const c=S.courses[S.cid];
+  c.holes.forEach((h,i)=>{ h.par=HGC_CARD[i][0]; h.si=HGC_CARD[i][1]; h.cardM=HGC_CARD[i][2]; });
+  await save(); render(); toast('Card loaded — par 72, 5726 m');
+}
+async function loadBuiltIn(){
+  if(!confirm('Replace every line in this course with the built-in Heidelberg lines?')) return;
+  const c=S.courses[S.cid];
+  const src2=seedCourse('x',HEIDELBERG,HGC_CARD);
+  c.holes.forEach((h,i)=>{ h.path=src2.holes[i].path; });
+  await save(); render(); toast('18 lines restored');
+}
+function dumpGeo(){
+  const c=S.courses[S.cid], out=[];
+  c.holes.forEach(h=>h.path.forEach((v,i)=>
+    out.push(h.n+' '+(i+1)+' '+v.lat.toFixed(6)+' '+v.lng.toFixed(6))));
+  navigator.clipboard.writeText(out.join('\n')).then(()=>toast(out.length+' points copied'),
+    ()=>toast('Copy blocked by the browser'));
+}
+
+/* ============================================================
+   EXPORT
+   ============================================================ */
+function q(v){ if(v===null||v===undefined) return ''; const s=String(v);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function toCSV(rows){ return rows.map(r=>r.map(q).join(',')).join('\n'); }
+
+function buildCSVs(rounds){
+  const shots=[['date','course','tee','hole','par','si','shot','club','plan','lat','lng','gps_acc_m',
+    'land_lat','land_lng','land_acc_m','shot_run_m',
+    'aim_target','aim_side_m','aim_side','aim_long_m','aim_src','off_line_m','off_line_side','routine']];
+  const putts=[['date','course','tee','hole','putt','length_m','level','distance','line',
+    'err_prep','err_read','err_speed','err_stroke','err_mental','note']];
+  const holes=[['date','course','tee','hcp','hole','par','si','card_m','shots_received',
+    'shots','putts','penalties','sand','score','to_par','nett','stableford','gir',
+    'first_putt_m','plan','note']];
+
+  rounds.forEach(r=>r.holes.forEach(h=>{
+    if(!h.shots.length && !h.putts.length) return;
+    h.shots.forEach((s,i)=>{
+      const L=landingOf(h,i), d=shotDev(h,i);
+      shots.push([r.date,r.courseName,r.tee||'',h.n,h.par,h.si,i+1,s.club,s.target,
+        s.pos?s.pos.lat.toFixed(7):'', s.pos?s.pos.lng.toFixed(7):'', s.pos?s.pos.acc:'',
+        L?L.lat.toFixed(7):'', L?L.lng.toFixed(7):'', L?L.acc:'',
+        d&&d.run!=null?d.run.toFixed(1):'',
+        d?d.aimName:'',
+        d&&d.aimLat!=null?Math.abs(d.aimLat).toFixed(1):'',
+        d&&d.aimLat!=null?(d.aimLat>0?'left':'right'):'',
+        d&&d.aimLon!=null?d.aimLon.toFixed(1):'',
+        d&&d.aimLat!=null?d.src:'',
+        d&&d.off!=null?Math.abs(d.off).toFixed(1):'',
+        d&&d.off!=null?(d.off>0?'left':'right'):'',
+        s.prep===true?1:(s.prep===false?0:'')]);
+    });
+    h.putts.forEach((p,i)=>putts.push([r.date,r.courseName,r.tee||'',h.n,i+1,p.len,p.level,p.dist,p.line,
+      p.prep?1:'',p.read||'',p.speed||'',p.stroke||'',p.mental?1:'',p.note||'']));
+    const sc=holeScore(h);
+    const hcp=r.hcp===undefined?'':r.hcp, rx=hcp===''?'':received(h.si,hcp);
+    holes.push([r.date,r.courseName,r.tee||'',hcp,h.n,h.par,h.si,h.cardM||'',rx,
+      h.shots.length,h.putts.length,h.penalties,h.sand,
+      sc, sc-h.par, hcp===''?'':sc-rx, hcp===''?'':points(sc,h.par,h.si,hcp),
+      (h.shots.length<=h.par-2 && h.penalties===0)?1:0,
+      h.putts.length?h.putts[0].len:'', h.plan||'', h.note||'']);
+  }));
+  return {shots:toCSV(shots), putts:toCSV(putts), holes:toCSV(holes)};
+}
+
+function vExport(app,foot){
+  const rounds = S.archive.concat(S.round?[S.round]:[]);
+  if(!rounds.length){
+    app.innerHTML=`<div class="eyebrow"><b>Export</b></div>
+      <div class="block note">Nothing logged yet. Play a hole and the CSVs appear here.</div>`;
+    foot.innerHTML=`<button class="btn nar" onclick="go('home')">&larr;</button>`; return;
+  }
+  const c=buildCSVs(rounds);
+  const blk=(k,label,csv)=>`
+    <div class="eyebrow"><b>${label}</b><span class="fill">${csv.split('\n').length-1} rows</span></div>
+    <pre class="csv" id="csv_${k}">${esc(csv)}</pre>
+    <div class="row">
+      <button class="btn ghost" onclick="copyCSV('${k}')">Copy</button>
+      <button class="btn ghost" onclick="dl('${k}')">Download</button>
+    </div>`;
+  window._csv=c;
+  app.innerHTML = `<div class="eyebrow"><b>Export</b><span class="fill">${rounds.length} round(s)</span></div>`
+    + blk('shots','Shots &amp; dispersion',c.shots)
+    + blk('putts','Putts',c.putts)
+    + blk('holes','Holes',c.holes)
+    + `<div class="eyebrow"><b>Reading the numbers</b></div>
+       <div class="block note">
+       <b>aim_side_m / aim_side</b> — how far the ball finished off the line you played it on,
+       measured from where you struck it to the next point up the hole's line. This is the number that
+       compares to launch-monitor side dispersion.<br><br>
+       <b>aim_long_m</b> — same shot, along the aim line. Positive is past the target.<br><br>
+       <b>aim_target</b> — the point on the hole's line one club-distance from your ball, which is
+       what the aim columns are measured against. <b>green</b> means the club would have finished past
+       the end of the line, so the green itself was used. Recoveries and anything you did not aim down
+       the line should be tagged <b>off plan</b> as you play them; the aim columns then stay empty
+       rather than lying.<br><br>
+       <b>aim_src</b> — <b>gps</b> if measured, <b>est</b> if you typed it. Filter before calculating
+       any dispersion figure.<br><br>
+       <b>off_line_m / off_line_side</b> — shortest distance from the ball to the hole's line,
+       wherever it runs. This is the course-management number: how far from the middle you finished.
+       Independent of what you aimed at, so it is still valid on recoveries.<br><br>
+       <b>shot_run_m</b> — straight-line distance between consecutive ball positions. Carry plus roll,
+       not carry.<br><br>
+       <b>stableford</b> — par plus shots received plus two, minus gross, floored at zero. Two points
+       is a nett par. This is the column to sort by when you go looking for the holes that cost you a
+       round.<br><br>
+       <b>routine</b> — 1 if you ticked <b>Ran the routine</b> before logging that shot. Worth
+       grouping by once you have a few rounds: if the shots where you worked through conditions,
+       target and swing are not measurably straighter, the routine is not the thing costing you
+       strokes and you should look elsewhere.<br><br>
+       <b>gir</b> — derived as shots-to-green &le; par&minus;2 with no penalty.
+       </div>`;
+  foot.innerHTML=`<button class="btn nar" onclick="go('home')">&larr;</button>`;
+}
+function copyCSV(k){ navigator.clipboard.writeText(window._csv[k]).then(()=>toast('Copied '+k+' CSV'),()=>toast('Copy blocked — select the text instead')); }
+function dl(k){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([window._csv[k]],{type:'text/csv'}));
+  a.download='centreline-'+k+'-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ============================================================ */
+S.tgt='on'; S.pick=null;
+load().then(render);
+</script>
