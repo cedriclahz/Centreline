@@ -50,7 +50,9 @@ button,input,select,textarea{font:inherit; color:inherit}
   font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase;
   color:var(--ink-2); border-bottom:1px solid var(--rule);
   padding-bottom:4px; margin:22px 0 10px; display:flex; gap:8px; align-items:center;
+  scroll-margin-top:64px;
 }
+.lbl{scroll-margin-top:64px}
 .eyebrow b{color:var(--ink); font-weight:700}
 .eyebrow .fill{margin-left:auto; font-weight:400}
 
@@ -525,7 +527,7 @@ function capture(){
 /* ============================================================
    STATE
    ============================================================ */
-let S = { screen:'home', courses:{}, cid:null, hsetup:0, round:null, hi:0, archive:[], tee:'', edit:null, bag:[], hcp:13, routineAuto:true, editPlan:false };
+let S = { screen:'home', courses:{}, cid:null, hsetup:0, round:null, hi:0, archive:[], tee:'', edit:null, bag:[], hcp:13, routineAuto:true, editPlan:false, editAim:false, aim:'' };
 const clubDist = name => { const c=S.bag.find(x=>x.club===name); return c && c.d>0 ? c.d : 0; };
 const uid = ()=> Math.random().toString(36).slice(2,9);
 const blankHoles = ()=> Array.from({length:18},(_,i)=>({n:i+1,par:4,si:i+1,path:[]}));
@@ -568,6 +570,7 @@ async function load(){
   S.bag     = await Store.get('cl:bag')     || DEFAULT_BAG.map(c=>({...c}));
   const hc  = await Store.get('cl:hcp'); S.hcp = (hc===null||hc===undefined)?13:hc;
   const ra  = await Store.get('cl:routine'); S.routineAuto = (ra===null||ra===undefined)?true:ra;
+  S.aim     = await Store.get('cl:aim') || '';
   if(!Object.keys(S.courses).length){
     const c=seedCourse('Heidelberg GC', HEIDELBERG, HGC_CARD);
     S.courses[c.id]=c;
@@ -582,6 +585,7 @@ async function save(){
   await Store.set('cl:bag',S.bag);
   await Store.set('cl:hcp',S.hcp);
   await Store.set('cl:routine',S.routineAuto);
+  await Store.set('cl:aim',S.aim);
 }
 
 function openCTS(){ document.getElementById('cts').classList.add('on'); window.scrollTo(0,0); }
@@ -622,7 +626,9 @@ const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
    ROUND HELPERS
    ============================================================ */
 const CH = ()=> S.round.holes[S.hi];
-const holeScore = h => h.shots.length + h.putts.length + h.penalties;
+const puttCount = h => h.putts.length + (h.putts2||0);
+/* A typed score wins outright — it is the whole hole, penalties included. */
+const holeScore = h => (h.score>0) ? h.score : (h.shots.length + puttCount(h) + h.penalties);
 
 /* landing point of shot i = position of the next recorded ball location */
 function landingOf(h,i){
@@ -678,6 +684,9 @@ function startBlock(){
       onclick="pickTee('${esc(t)}')">${esc(t)}</button>`).join('')}</div>
     <label class="lbl">Handicap</label>
     <input type="number" inputmode="numeric" value="${S.hcp}" onchange="setHcp(this.value)">
+    <label class="lbl">Today's aims or thoughts</label>
+    <textarea style="min-height:84px" onchange="setAim(this.value)"
+      placeholder="One or two things you are actually trying to do today. Shown at the top of every hole.">${esc(S.aim)}</textarea>
     <button class="btn solid" style="margin-top:12px" onclick="newRound()">New round</button>`;
 }
 async function toggleRoutine(){ S.routineAuto=!S.routineAuto; await save(); render();
@@ -686,6 +695,7 @@ async function pickCourse(id){ S.cid=id; const c=S.courses[id];
   if(c && c.tees && !c.tees.includes(S.tee)) S.tee=c.tees[0];
   await save(); render(); }
 async function pickTee(t){ S.tee=t; await save(); render(); }
+async function setAim(v){ S.aim=v; await save(); }
 async function setHcp(v){ S.hcp=Math.max(0,Math.min(54,parseInt(v,10)||0)); await save(); render(); }
 
 function vHome(app,foot){
@@ -704,10 +714,14 @@ function vHome(app,foot){
     <div id="geoout"></div>
     <div class="eyebrow"><b>How it works</b></div>
     <div class="block note">
-      Stand at your ball, pick the club, tap <b>Log shot from here</b>. That fix is where the
-      previous shot finished — so each ball position is recorded once and every shot gets a
-      landing point for free.<br><br>
-      Mark the centreline and green for each hole under Courses first. Do it once per course.
+      Stand at your ball, pick the club, tap <b>Log shot from here</b>. That fix is also where the
+      previous shot finished, so each ball position is recorded once and every shot gets a landing
+      point for free.<br><br>
+      Tag a shot <b>Off plan</b> when you were not aiming down the hole's line — punch-outs,
+      bail-outs, anything sideways. The aim figures are then left blank instead of wrong.<br><br>
+      On the green: <b>Mark ball on green</b> once, then add each putt. The putt length you type is
+      the accurate proximity; the fix only gives the direction you missed.<br><br>
+      Heidelberg is already loaded — 18 lines, the White card and your hole plans. Nothing to set up.
     </div>`;
   foot.innerHTML='';
 }
@@ -972,7 +986,8 @@ function vRound(app,foot){
     return `<div class="shot">
       <div class="shot-top">
         <span class="shot-seq">${i+1}</span>
-        <span class="shot-club" onclick="S.edit=(S.edit===${i}?null:${i});render()">${esc(s.club)}</span>
+        <span class="shot-club" onclick="S.edit=(S.edit===${i}?null:${i});render()"
+          style="${s.club?'':'color:var(--red)'}">${s.club?esc(s.club):'club?'}</span>
         <span class="shot-tag">${s.target==='off'?'off plan':'on the line'}</span>
         <span class="shot-acc">${s.prep===true?'\u2713 ':(s.prep===false?'\u2717 ':'')}${s.pos?('\u00b1'+s.pos.acc):'no fix'}</span>
         <span class="putt x" onclick="delShot(${i})">&times;</span>
@@ -990,17 +1005,33 @@ function vRound(app,foot){
         <span class="shot-acc">${p.level}</span>
         <span class="x" onclick="delPutt(${i})">&times;</span>
       </div>${errs.length?`<div class="errs">${errs.join(' &middot; ')}</div>`:''}</div>`;
-  }).join('') || `<div class="putt"><span class="shot-acc">No putts logged.</span></div>`;
+  }).join('') + ((h.putts2||0) ? `<div class="putt"><div class="p1">
+      <span class="len">${h.putts2}</span>
+      <span class="res">counted, no detail</span></div></div>` : '')
+    || `<div class="putt"><span class="shot-acc">No putts logged.</span></div>`;
 
   app.innerHTML = `
     <div class="holehead">
       <div class="holenum">${h.n}</div>
       <div class="holemeta">Par <b>${h.par}</b> &middot; SI <b>${h.si}</b>${
         rx?' &middot; <b>'+rx+' shot'+(rx>1?'s':'')+'</b>':''}${h.cardM?' &middot; '+h.cardM+' m':''}${geo}<br>
-        ${h.shots.length} shots &middot; ${h.putts.length} putts${h.penalties?' &middot; '+h.penalties+' pen':''}${h.sand?' &middot; '+h.sand+' sand':''}</div>
+        ${h.shots.length} shots${unnamed(h)?' ('+unnamed(h)+' unnamed)':''} &middot; ${puttCount(h)} putts${h.penalties?' &middot; '+h.penalties+' pen':''}${h.sand?' &middot; '+h.sand+' sand':''}</div>
       <div class="holescore"><div class="k">Score</div><div class="n">${sc||'—'}</div>
         <div class="k">${sc?((rel===0?'level':(rel>0?'+'+rel:rel))+' &middot; '+pts+' pt'+(pts===1?'':'s')):''}</div></div>
     </div>
+
+    <div class="eyebrow"><b>Today</b><span class="fill">${S.editAim?'this round only':'tap to edit'}</span></div>
+    ${S.editAim
+      ? `<textarea id="aimbox" style="min-height:84px"
+           placeholder="What you are trying to do today.">${esc(r.aim||'')}</textarea>
+         <div class="row" style="margin:8px 0 10px">
+           <button class="btn solid" onclick="saveAim()">Save</button>
+           <button class="btn ghost" style="flex:0 0 90px" onclick="S.editAim=false;render()">Cancel</button>
+         </div>`
+      : `<div class="block note" style="border-left:3px solid var(--blue);cursor:pointer"
+           onclick="S.editAim=true;render()">${r.aim
+             ? esc(r.aim).replace(/\n/g,'<br>')
+             : '<span style="opacity:.6">No aim set for today. Tap to add one.</span>'}</div>`}
 
     <div class="eyebrow"><b>Plan</b><span class="fill">${S.editPlan?'saves to the course':'tap to edit'}</span></div>
     ${S.editPlan
@@ -1019,6 +1050,8 @@ function vRound(app,foot){
 
     <div class="eyebrow"><b>Shots</b><span class="fill">Log where you stand</span></div>
     <div class="block flush">${shots}</div>
+    <div class="eyebrow" style="margin-top:12px"><b>Club</b><span class="fill">${
+      unnamed(h) ? 'naming shot '+(h.shots.findIndex(x=>!x.club)+1) : 'arms the next shot'}</span></div>
     <div class="chips grid">${S.bag.map(c=>`<button class="chip" aria-pressed="${S.pick===c.club}" onclick="pickClub('${esc(c.club)}')">${esc(c.club)}<br><span style="font-size:9px;opacity:.55">${c.d||'?'}</span></button>`).join('')}
       <button class="chip" aria-pressed="${S.pick==='Other'}" onclick="pickClub('Other')">Other</button></div>
     <div class="chips two">
@@ -1026,19 +1059,20 @@ function vRound(app,foot){
       <button class="chip" aria-pressed="${S.tgt==='off'}" onclick="S.tgt='off';render()">Off plan</button>
     </div>
     <button class="btn ghost" onclick="openCTS()">Show C&middot;T&middot;S</button>
-    <button class="btn solid" onclick="logShot()">Log shot from here${S.pick?' &mdash; '+esc(S.pick):''}</button>
     <button class="btn ghost" onclick="logShot(true)">Log without a fix</button>
 
-    <div class="eyebrow"><b>Green</b><span class="fill">${h.greenPos?'\u00b1'+h.greenPos.acc+' m':'ball not marked'}</span></div>
-    <button class="btn ghost" onclick="markBall()">${h.greenPos?'Re-mark ball on green':'Mark ball on green'}</button>
-    <div class="note" style="margin-bottom:10px">This fix is the landing point of your approach. It sets the direction of the miss; the first putt length below is the accurate proximity.</div>
-
-    <div class="eyebrow"><b>Putts</b></div>
+    <div class="eyebrow"><b>Putts</b><span class="fill">${
+      h.greenPos?'green fix \u00b1'+h.greenPos.acc+' m':'no green fix yet'}</span></div>
     <div class="block flush">${putts}</div>
-    <button class="btn ghost" onclick="openPutt()">+ Add putt</button>
+    <label class="lbl">Putts, counted only</label>
+    <div class="step"><button onclick="quickPutt(-1)">&minus;</button><span>${h.putts2||0}</span><button onclick="quickPutt(1)">+</button></div>
+    <button class="btn ghost" style="margin-top:8px" onclick="openPutt()">+ Add putt with detail</button>
     <div id="puttform"></div>
 
-    <div class="eyebrow"><b>Hole</b></div>
+    <div class="eyebrow"><b>Hole</b><span class="fill">${
+      h.score>0 ? 'score typed in' : 'score from what you logged'}</span></div>
+    <label class="lbl">Score for the hole${h.score>0?'':' — leave at 0 to count what you logged'}</label>
+    <div class="step"><button onclick="hadj('score',-1)">&minus;</button><span>${h.score||'auto '+sc}</span><button onclick="hadj('score',1)">+</button></div>
     <label class="lbl">Penalty strokes</label>
     <div class="step"><button onclick="hadj('penalties',-1)">&minus;</button><span>${h.penalties}</span><button onclick="hadj('penalties',1)">+</button></div>
     <label class="lbl">Bunker shots played</label>
@@ -1047,10 +1081,11 @@ function vRound(app,foot){
     <textarea onchange="hnote(this.value)" placeholder="Wind, lie, decision, anything worth remembering.">${esc(h.note)}</textarea>`;
 
   foot.innerHTML=`
-    <button class="btn nar" onclick="go('home')">&equiv;</button>
     <button class="btn nar" onclick="navHole(-1)">&larr;</button>
-    ${h.n<18 ? `<button class="btn solid" onclick="navHole(1)">Hole ${h.n+1} &rarr;</button>`
-              : `<button class="btn solid" onclick="finishRound()">File round</button>`}`;
+    <button class="btn solid" onclick="logShot()">Log shot</button>
+    ${h.n<18 ? `<button class="btn nar" onclick="navHole(1)">&rarr;</button>`
+              : `<button class="btn nar" onclick="finishRound()">End</button>`}
+    <button class="btn nar" onclick="go('home')">&equiv;</button>`;
 }
 
 function toGreen(h){
@@ -1064,7 +1099,11 @@ function toGreen(h){
 
 /* ---------- putt form ---------- */
 let PF=null;
-function openPutt(){ PF={len:'',level:'Flat',dist:'Made',line:'On',prep:false,read:'',speed:'',stroke:'',mental:false,note:''}; drawPutt(); }
+async function openPutt(){
+  await greenFixIfNeeded();
+  PF={len:'',level:'Flat',dist:'Made',line:'On',prep:false,read:'',speed:'',stroke:'',mental:false,note:''};
+  drawPutt();
+}
 function pfs(k,v){ PF[k]=v; drawPutt(); }              /* always has a value */
 function pf(k,v){ PF[k]= PF[k]===v?'':v; drawPutt(); }  /* tap again to clear */
 function pfb(k){ PF[k]=!PF[k]; drawPutt(); }
@@ -1107,13 +1146,20 @@ async function delPutt(i){ CH().putts.splice(i,1); await save(); render(); }
 /* ============================================================
    ACTIONS
    ============================================================ */
-function pickClub(c){ S.pick = S.pick===c?null:c; render(); }
+async function pickClub(c){
+  const h = S.round ? CH() : null;
+  const gap = h ? h.shots.findIndex(x=>!x.club) : -1;
+  if(gap>=0){ h.shots[gap].club=c; S.pick=null; await save(); render(); return; }
+  S.pick = S.pick===c ? null : c;
+  render();
+}
+const unnamed = h => h.shots.filter(x=>!x.club).length;
 
 async function logShot(noFix){
-  if(!S.pick){ toast('Pick a club first'); return; }
   const pos = noFix ? null : await capture();
   if(!noFix && !pos){ toast(GEO_WHY||'No fix — shot not logged'); return; }
-  CH().shots.push({club:S.pick, target:S.tgt==='off'?'off':'on', pos, estLat:null, prep:null});
+  CH().shots.push({club:S.pick||null, target:S.tgt==='off'?'off':'on', pos, estLat:null, prep:null});
+  S.pick=null;
   await save(); render();
   if(S.routineAuto) openCTS();
 }
@@ -1126,10 +1172,29 @@ async function setEst(i,side){
 async function clearEst(i){ CH().shots[i].estLat=null; S.edit=null; await save(); render(); }
 async function delShot(i){ CH().shots.splice(i,1); await save(); render(); }
 async function markBall(){ const p=await capture(); if(p){ CH().greenPos=p; await save(); render(); } }
+/* The first putt of the hole is where the approach finished, so take the fix then.
+   One less thing to remember, and it lands at exactly the right moment. */
+async function greenFixIfNeeded(){
+  const h=CH();
+  if(h.greenPos || puttCount(h)>0) return;
+  const p=await capture();
+  if(p){ h.greenPos=p; await save(); }
+}
+async function quickPutt(d){
+  const h=CH();
+  if(d>0) await greenFixIfNeeded();
+  h.putts2=Math.max(0,(h.putts2||0)+d);
+  await save(); render();
+}
 
 async function hadj(k,d){ const h=CH(); h[k]=Math.max(0,h[k]+d); await save(); render(); }
 async function hnote(v){ CH().note=v; await save(); }
 /* The plan belongs to the course, so an edit made mid-round persists to every future round. */
+async function saveAim(){
+  const v=document.getElementById('aimbox').value;
+  S.round.aim=v; S.aim=v; S.editAim=false;
+  await save(); render();
+}
 async function savePlan(){
   const v=document.getElementById('planbox').value;
   const h=CH(); h.plan=v;
@@ -1138,16 +1203,16 @@ async function savePlan(){
   S.editPlan=false; await save(); render();
   toast(c?'Saved to '+c.name:'Saved for this round only');
 }
-async function navHole(d){ S.hi=Math.max(0,Math.min(17,S.hi+d)); S.pick=null; S.tgt='on'; PF=null; S.edit=null; S.editPlan=false; await save(); render(); window.scrollTo(0,0); }
+async function navHole(d){ S.hi=Math.max(0,Math.min(17,S.hi+d)); S.pick=null; S.tgt='on'; PF=null; S.edit=null; S.editPlan=false; S.editAim=false; await save(); render(); window.scrollTo(0,0); }
 
 async function newRound(){
   const ids=Object.keys(S.courses);
   const c=S.courses[S.cid&&S.courses[S.cid]?S.cid:ids[0]];
   if(c.tees && !c.tees.includes(S.tee)) S.tee=c.tees[0];
   S.round={ id:uid(), courseId:c.id, courseName:c.name, tee:S.tee||'', date:new Date().toISOString().slice(0,10),
-    hcp:S.hcp,
+    hcp:S.hcp, aim:S.aim||'',
     holes:c.holes.map(h=>({n:h.n,par:h.par,si:h.si,cardM:h.cardM,plan:h.plan||'',path:h.path.slice(),
-      shots:[],greenPos:null,putts:[],penalties:0,sand:0,note:''})) };
+      shots:[],greenPos:null,putts:[],putts2:0,penalties:0,sand:0,score:0,note:''})) };
   S.hi=0; S.pick=null; S.tgt='on';
   await save(); go('round');
 }
@@ -1264,8 +1329,11 @@ function dumpGeo(){
 /* ============================================================
    EXPORT
    ============================================================ */
-function q(v){ if(v===null||v===undefined) return ''; const s=String(v);
-  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+/* Newlines are flattened so every record stays on one line — a quoted field containing a
+   line break is legal CSV but breaks naive parsers, spreadsheets pasted by hand, and chat. */
+function q(v){ if(v===null||v===undefined) return '';
+  const s=String(v).replace(/\r?\n+/g,' \u00b7 ').trim();
+  return /[",]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
 function toCSV(rows){ return rows.map(r=>r.map(q).join(',')).join('\n'); }
 
 function buildCSVs(rounds){
@@ -1275,11 +1343,12 @@ function buildCSVs(rounds){
   const putts=[['date','course','tee','hole','putt','length_m','level','distance','line',
     'err_prep','err_read','err_speed','err_stroke','err_mental','note']];
   const holes=[['date','course','tee','hcp','hole','par','si','card_m','shots_received',
-    'shots','putts','penalties','sand','score','to_par','nett','stableford','gir',
-    'first_putt_m','plan','note']];
+    'shots','putts','penalties','sand','score','score_src','to_par','nett','stableford','gir',
+    'first_putt_m','round_aim','plan','note']];
 
   rounds.forEach(r=>r.holes.forEach(h=>{
-    if(!h.shots.length && !h.putts.length) return;
+    /* A hole counts as played if anything at all was recorded, including a typed score. */
+    if(!h.shots.length && !puttCount(h) && !h.penalties && !h.sand && !(h.score>0) && !h.note) return;
     h.shots.forEach((s,i)=>{
       const L=landingOf(h,i), d=shotDev(h,i);
       shots.push([r.date,r.courseName,r.tee||'',h.n,h.par,h.si,i+1,s.club,s.target,
@@ -1300,10 +1369,10 @@ function buildCSVs(rounds){
     const sc=holeScore(h);
     const hcp=r.hcp===undefined?'':r.hcp, rx=hcp===''?'':received(h.si,hcp);
     holes.push([r.date,r.courseName,r.tee||'',hcp,h.n,h.par,h.si,h.cardM||'',rx,
-      h.shots.length,h.putts.length,h.penalties,h.sand,
-      sc, sc-h.par, hcp===''?'':sc-rx, hcp===''?'':points(sc,h.par,h.si,hcp),
-      (h.shots.length<=h.par-2 && h.penalties===0)?1:0,
-      h.putts.length?h.putts[0].len:'', h.plan||'', h.note||'']);
+      h.shots.length,puttCount(h),h.penalties,h.sand,
+      sc, h.score>0?'typed':'logged', sc-h.par, hcp===''?'':sc-rx, hcp===''?'':points(sc,h.par,h.si,hcp),
+      (h.score>0 || !h.shots.length) ? '' : ((h.shots.length<=h.par-2 && h.penalties===0)?1:0),
+      h.putts.length?h.putts[0].len:'', r.aim||'', h.plan||'', h.note||'']);
   }));
   return {shots:toCSV(shots), putts:toCSV(putts), holes:toCSV(holes)};
 }
@@ -1353,7 +1422,10 @@ function vExport(app,foot){
        grouping by once you have a few rounds: if the shots where you worked through conditions,
        target and swing are not measurably straighter, the routine is not the thing costing you
        strokes and you should look elsewhere.<br><br>
-       <b>gir</b> — derived as shots-to-green &le; par&minus;2 with no penalty.
+       <b>score_src</b> — <b>logged</b> if the score came from the shots and putts you recorded,
+       <b>typed</b> if you entered it directly. A typed score is the whole hole including penalties.<br><br>
+       <b>gir</b> — derived as shots-to-green &le; par&minus;2 with no penalty. Left blank on holes
+       where you typed the score or logged no shots, since it cannot be inferred.
        </div>`;
   foot.innerHTML=`<button class="btn nar" onclick="go('home')">&larr;</button>`;
 }
