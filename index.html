@@ -535,6 +535,7 @@ const blankHoles = ()=> Array.from({length:18},(_,i)=>({n:i+1,par:4,si:i+1,path:
 function migrate(h){
   if(!h.path){ h.path=[h.a,h.b,h.green].filter(Boolean); delete h.a; delete h.b; delete h.green; }
   if(h.plan===undefined) h.plan='';
+  if(h.putts2>0){ for(let i=0;i<h.putts2;i++) h.putts.push(blankPutt()); h.putts2=0; }
   if(h.cardM===undefined) h.cardM=null;
   return h;
 }
@@ -565,6 +566,7 @@ async function load(){
   if(filled){ await save(); setTimeout(()=>toast('Heidelberg lines, card and plans loaded'),600); }
   S.round   = await Store.get('cl:round')   || null;
   if(S.round) S.round.holes.forEach(migrate);
+  if(S.round) S.round.holes.forEach(h=>h.putts.forEach(p=>{ if(p.dist==='Made') p.dist='Good'; }));
   (await Store.get('cl:archive')||[]).forEach(r=>r.holes.forEach(migrate));
   const sa  = await Store.get('cl:archive');
   S.archive = Array.isArray(sa) ? sa : [];
@@ -629,9 +631,13 @@ const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
    ROUND HELPERS
    ============================================================ */
 const CH = ()=> S.round.holes[S.hi];
-const puttCount = h => h.putts.length + (h.putts2||0);
+const puttCount = h => h.putts.length;
+/* In stroke play the final putt of the hole is the one that went in. */
+const holed = (h,i) => i === h.putts.length-1;
+const blankPutt = ()=>({len:'',level:'',dist:'',line:'',prep:false,read:'',speed:'',stroke:'',mental:false,note:''});
 /* A typed score wins outright — it is the whole hole, penalties included. */
-const holeScore = h => (h.score>0) ? h.score : (h.shots.length + puttCount(h) + h.penalties);
+const autoScore = h => h.shots.length + puttCount(h) + h.penalties;
+const holeScore = h => (h.score>0) ? h.score : autoScore(h);
 
 /* landing point of shot i = position of the next recorded ball location */
 function landingOf(h,i){
@@ -1005,19 +1011,37 @@ function vRound(app,foot){
     </div>`;
   }).join('') || `<div class="shot"><div class="pending">No shots logged.</div></div>`;
 
-  /* putts */
-  const putts = h.putts.map((p,i)=>{
-    const errs=[p.prep&&'prep',p.read&&('read '+p.read),p.speed&&('speed '+p.speed),p.stroke&&(p.stroke),p.mental&&'mental'].filter(Boolean);
-    return `<div class="putt"><div class="p1">
-        <span class="len">${p.len} m</span>
-        <span class="res ${p.dist==='Made'?'made':''}">${p.dist}${p.dist==='Made'?'':' / '+p.line}</span>
-        <span class="shot-acc">${p.level}</span>
-        <span class="x" onclick="delPutt(${i})">&times;</span>
-      </div>${errs.length?`<div class="errs">${errs.join(' &middot; ')}</div>`:''}</div>`;
-  }).join('') + ((h.putts2||0) ? `<div class="putt"><div class="p1">
-      <span class="len">${h.putts2}</span>
-      <span class="res">counted, no detail</span></div></div>` : '')
-    || `<div class="putt"><span class="shot-acc">No putts logged.</span></div>`;
+  /* putts — one card per putt, every field optional */
+  const opt=(i,k,arr)=>`<div class="chips ${arr.length>3?'four':'grid'}">${arr.map(o=>
+    `<button class="chip" aria-pressed="${h.putts[i][k]===o}"
+      onclick="puttSet(${i},'${k}','${o}')">${o}</button>`).join('')}</div>`;
+  const putts = h.putts.length ? h.putts.map((p,i)=>`
+    <div class="shot">
+      <div class="shot-top">
+        <span class="shot-seq">${i+1}</span>
+        <span class="shot-club" style="flex:1;color:${holed(h,i)?'var(--blue)':'var(--ink)'}">${holed(h,i)?'Holed':'Missed'}</span>
+        <input type="number" inputmode="decimal" step="0.5" placeholder="length"
+          value="${p.len}" style="width:104px;min-height:40px;text-align:right"
+          onchange="puttLen(${i},this.value)">
+        <span class="shot-acc" style="width:14px">m</span>
+      </div>
+      <label class="lbl">Level</label>${opt(i,'level',['Up','Down','Sidehill','Flat'])}
+      <label class="lbl">Distance</label>${opt(i,'dist',['Good','Short','Past'])}
+      <label class="lbl">Line</label>${opt(i,'line',['On','High','Low'])}
+      <label class="lbl">Errors</label>
+      <div class="chips">
+        <button class="chip" aria-pressed="${p.prep}" onclick="puttFlag(${i},'prep')">Prep</button>
+        <button class="chip" aria-pressed="${p.read==='over'}" onclick="puttSet(${i},'read','over')">Read over</button>
+        <button class="chip" aria-pressed="${p.read==='under'}" onclick="puttSet(${i},'read','under')">Read under</button>
+        <button class="chip" aria-pressed="${p.speed==='fast'}" onclick="puttSet(${i},'speed','fast')">Speed fast</button>
+        <button class="chip" aria-pressed="${p.speed==='slow'}" onclick="puttSet(${i},'speed','slow')">Speed slow</button>
+        <button class="chip" aria-pressed="${p.stroke==='face'}" onclick="puttSet(${i},'stroke','face')">Face</button>
+        <button class="chip" aria-pressed="${p.stroke==='path'}" onclick="puttSet(${i},'stroke','path')">Path</button>
+        <button class="chip" aria-pressed="${p.mental}" onclick="puttFlag(${i},'mental')">Mental</button>
+      </div>
+      <label class="lbl">Note</label>
+      <input type="text" value="${esc(p.note)}" onchange="puttNote(${i},this.value)">
+    </div>`).join('') : `<div class="shot"><div class="pending">No putts on this hole yet.</div></div>`;
 
   app.innerHTML = `
     <div class="holehead">
@@ -1072,16 +1096,18 @@ function vRound(app,foot){
 
     <div class="eyebrow"><b>Putts</b><span class="fill">${
       h.greenPos?'green fix \u00b1'+h.greenPos.acc+' m':'no green fix yet'}</span></div>
-    <div class="block flush">${putts}</div>
-    <label class="lbl">Putts, counted only</label>
-    <div class="step"><button onclick="quickPutt(-1)">&minus;</button><span>${h.putts2||0}</span><button onclick="quickPutt(1)">+</button></div>
-    <button class="btn ghost" style="margin-top:8px" onclick="openPutt()">+ Add putt with detail</button>
-    <div id="puttform"></div>
+    <div class="step"><button onclick="setPutts(-1)">&minus;</button><span>${h.putts.length}</span><button onclick="setPutts(1)">+</button></div>
+    <div class="block flush" style="margin-top:8px">${putts}</div>
+    <div class="note" style="margin-top:8px">Set the number of putts first. Fill in as much or as
+      little detail as you have time for — anything left blank stays blank.</div>
 
     <div class="eyebrow"><b>Hole</b><span class="fill">${
       h.score>0 ? 'score typed in' : 'score from what you logged'}</span></div>
-    <label class="lbl">Score for the hole${h.score>0?'':' — leave at 0 to count what you logged'}</label>
-    <div class="step"><button onclick="hadj('score',-1)">&minus;</button><span>${h.score||'auto '+sc}</span><button onclick="hadj('score',1)">+</button></div>
+    <label class="lbl">Score for the hole</label>
+    <div class="step"><button onclick="scoreAdj(-1)">&minus;</button><span>${sc}${h.score>0?'':' auto'}</span><button onclick="scoreAdj(1)">+</button></div>
+    <div class="note" style="margin-top:4px">${h.score>0
+      ? 'Typed in. Overrides the '+autoScore(h)+' this hole would otherwise count.'
+      : 'Counting what you logged. Nudge it if you did not record every shot.'}</div>
     <label class="lbl">Penalty strokes</label>
     <div class="step"><button onclick="hadj('penalties',-1)">&minus;</button><span>${h.penalties}</span><button onclick="hadj('penalties',1)">+</button></div>
     <label class="lbl">Bunker shots played</label>
@@ -1106,51 +1132,30 @@ function toGreen(h){
   return d==null?'':Math.round(d)+' m to green centre';
 }
 
-/* ---------- putt form ---------- */
-let PF=null;
-async function openPutt(){
-  await greenFixIfNeeded();
-  PF={len:'',level:'Flat',dist:'Made',line:'On',prep:false,read:'',speed:'',stroke:'',mental:false,note:''};
-  drawPutt();
+/* ---------- putt editing ---------- */
+async function setPutts(d){
+  const h=CH();
+  if(d>0){ await greenFixIfNeeded(); h.putts.push(blankPutt()); }
+  else if(h.putts.length) h.putts.pop();
+  await save(); render();
 }
-function pfs(k,v){ PF[k]=v; drawPutt(); }              /* always has a value */
-function pf(k,v){ PF[k]= PF[k]===v?'':v; drawPutt(); }  /* tap again to clear */
-function pfb(k){ PF[k]=!PF[k]; drawPutt(); }
-function drawPutt(){
-  const el=document.getElementById('puttform'); if(!PF){el.innerHTML='';return;}
-  const set=(k,arr)=>`<div class="chips four">${arr.map(o=>`<button class="chip" aria-pressed="${PF[k]===o}" onclick="pfs('${k}','${o}')">${o}</button>`).join('')}</div>`;
-  el.innerHTML=`
-    <div class="block">
-      <label class="lbl">Length (metres)</label>
-      <input type="number" inputmode="decimal" step="0.5" value="${PF.len}" oninput="PF.len=this.value">
-      <label class="lbl">Level</label>${set('level',['Up','Down','Sidehill','Flat'])}
-      <label class="lbl">Distance</label>${set('dist',['Made','Short','Past'])}
-      <label class="lbl">Line</label>${set('line',['On','High','Low'])}
-      <label class="lbl">Errors — tap any that applied</label>
-      <div class="chips">
-        <button class="chip" aria-pressed="${PF.prep}" onclick="pfb('prep')">Prep</button>
-        <button class="chip" aria-pressed="${PF.read==='over'}" onclick="pf('read','over')">Read over</button>
-        <button class="chip" aria-pressed="${PF.read==='under'}" onclick="pf('read','under')">Read under</button>
-        <button class="chip" aria-pressed="${PF.speed==='fast'}" onclick="pf('speed','fast')">Speed fast</button>
-        <button class="chip" aria-pressed="${PF.speed==='slow'}" onclick="pf('speed','slow')">Speed slow</button>
-        <button class="chip" aria-pressed="${PF.stroke==='face'}" onclick="pf('stroke','face')">Face</button>
-        <button class="chip" aria-pressed="${PF.stroke==='path'}" onclick="pf('stroke','path')">Path</button>
-        <button class="chip" aria-pressed="${PF.mental}" onclick="pfb('mental')">Mental</button>
-      </div>
-      <label class="lbl">Note</label>
-      <input type="text" value="${esc(PF.note)}" oninput="PF.note=this.value">
-      <div class="row" style="margin-top:12px">
-        <button class="btn solid" onclick="savePutt()">Save putt</button>
-        <button class="btn ghost nar" style="flex:0 0 90px" onclick="PF=null;drawPutt()">Cancel</button>
-      </div>
-    </div>`;
+async function puttSet(i,k,v){
+  const p=CH().putts[i]; if(!p) return;
+  p[k] = (p[k]===v) ? '' : v;      // tap again to clear
+  await save(); render();
 }
-async function savePutt(){
-  if(PF.len===''){ toast('Enter the putt length'); return; }
-  CH().putts.push({...PF, len:Number(PF.len)});
-  PF=null; await save(); render();
+async function puttFlag(i,k){
+  const p=CH().putts[i]; if(!p) return;
+  p[k]=!p[k]; await save(); render();
 }
-async function delPutt(i){ CH().putts.splice(i,1); await save(); render(); }
+async function puttLen(i,v){
+  const p=CH().putts[i]; if(!p) return;
+  p.len = v===''?'':Number(v); await save();
+}
+async function puttNote(i,v){
+  const p=CH().putts[i]; if(!p) return;
+  p.note=v; await save();
+}
 
 /* ============================================================
    ACTIONS
@@ -1189,14 +1194,17 @@ async function greenFixIfNeeded(){
   const p=await capture();
   if(p){ h.greenPos=p; await save(); }
 }
-async function quickPutt(d){
-  const h=CH();
-  if(d>0) await greenFixIfNeeded();
-  h.putts2=Math.max(0,(h.putts2||0)+d);
-  await save(); render();
-}
+
 
 async function hadj(k,d){ const h=CH(); h[k]=Math.max(0,h[k]+d); await save(); render(); }
+/* Starts from whatever the hole currently reads, so the first tap moves off the auto figure
+   rather than jumping to 1. Landing back on the auto value hands control back to it. */
+async function scoreAdj(d){
+  const h=CH(), auto=autoScore(h);
+  let n=(h.score>0?h.score:auto)+d;
+  h.score = (n<1 || n===auto) ? 0 : n;
+  await save(); render();
+}
 async function hnote(v){ CH().note=v; await save(); }
 /* The plan belongs to the course, so an edit made mid-round persists to every future round. */
 async function saveAim(){
@@ -1212,7 +1220,7 @@ async function savePlan(){
   S.editPlan=false; await save(); render();
   toast(c?'Saved to '+c.name:'Saved for this round only');
 }
-async function navHole(d){ S.hi=Math.max(0,Math.min(17,S.hi+d)); S.pick=null; S.tgt='on'; PF=null; S.edit=null; S.editPlan=false; S.editAim=false; await save(); render(); window.scrollTo(0,0); }
+async function navHole(d){ S.hi=Math.max(0,Math.min(17,S.hi+d)); S.pick=null; S.tgt='on'; S.edit=null; S.editPlan=false; S.editAim=false; await save(); render(); window.scrollTo(0,0); }
 
 async function newRound(){
   const ids=Object.keys(S.courses);
@@ -1349,7 +1357,7 @@ function buildCSVs(rounds){
   const shots=[['date','course','tee','hole','par','si','shot','club','plan','lat','lng','gps_acc_m',
     'land_lat','land_lng','land_acc_m','shot_run_m',
     'aim_target','aim_side_m','aim_side','aim_long_m','aim_src','off_line_m','off_line_side','routine']];
-  const putts=[['date','course','tee','hole','putt','length_m','level','distance','line',
+  const putts=[['date','course','tee','hole','putt','length_m','level','holed','distance','line',
     'err_prep','err_read','err_speed','err_stroke','err_mental','note']];
   const holes=[['date','course','tee','hcp','hole','par','si','card_m','shots_received',
     'shots','putts','penalties','sand','score','score_src','to_par','nett','stableford','gir',
@@ -1373,8 +1381,10 @@ function buildCSVs(rounds){
         d&&d.off!=null?(d.off>0?'left':'right'):'',
         s.prep===true?1:(s.prep===false?0:'')]);
     });
-    h.putts.forEach((p,i)=>putts.push([r.date,r.courseName,r.tee||'',h.n,i+1,p.len,p.level,p.dist,p.line,
-      p.prep?1:'',p.read||'',p.speed||'',p.stroke||'',p.mental?1:'',p.note||'']));
+    h.putts.forEach((p,i)=>{ const hd=holed(h,i);
+      putts.push([r.date,r.courseName,r.tee||'',h.n,i+1,p.len,p.level,
+      hd?1:0,p.dist,p.line,
+      p.prep?1:'',p.read||'',p.speed||'',p.stroke||'',p.mental?1:'',p.note||'']); });
     const sc=holeScore(h);
     const hcp=r.hcp===undefined?'':r.hcp, rx=hcp===''?'':received(h.si,hcp);
     holes.push([r.date,r.courseName,r.tee||'',hcp,h.n,h.par,h.si,h.cardM||'',rx,
@@ -1424,6 +1434,12 @@ function vExport(app,foot){
        Independent of what you aimed at, so it is still valid on recoveries.<br><br>
        <b>shot_run_m</b> — straight-line distance between consecutive ball positions. Carry plus roll,
        not carry.<br><br>
+       <b>distance / line</b> — the two axes of the putt, kept separate. <b>Good</b> distance means
+       the pace was right whether or not it dropped, so speed control and read can be judged
+       independently.<br><br>
+       <b>holed</b> — derived: the last putt on the hole is the one that went in.<br><br>
+       <b>level / distance / line</b> — blank where you did not record them. Filter on the ones you
+       care about rather than assuming a blank means anything.<br><br>
        <b>stableford</b> — par plus shots received plus two, minus gross, floored at zero. Two points
        is a nett par. This is the column to sort by when you go looking for the holes that cost you a
        round.<br><br>
