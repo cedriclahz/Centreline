@@ -551,7 +551,8 @@ function points(gross,par,si,hcp){
 }
 
 async function load(){
-  S.courses = await Store.get('cl:courses') || {};
+  const sc  = await Store.get('cl:courses');
+  S.courses = (sc && typeof sc==='object' && Object.keys(sc).length) ? sc : {};
   let filled=0;
   Object.values(S.courses).forEach(c=>{
     if(!Array.isArray(c.tees) || !c.tees.length) c.tees=DEFAULT_TEES.slice();
@@ -565,9 +566,11 @@ async function load(){
   S.round   = await Store.get('cl:round')   || null;
   if(S.round) S.round.holes.forEach(migrate);
   (await Store.get('cl:archive')||[]).forEach(r=>r.holes.forEach(migrate));
-  S.archive = await Store.get('cl:archive') || [];
+  const sa  = await Store.get('cl:archive');
+  S.archive = Array.isArray(sa) ? sa : [];
   S.tee     = await Store.get('cl:tee')     || '';
-  S.bag     = await Store.get('cl:bag')     || DEFAULT_BAG.map(c=>({...c}));
+  const sb  = await Store.get('cl:bag');
+  S.bag     = (Array.isArray(sb) && sb.length) ? sb : DEFAULT_BAG.map(c=>({...c}));
   const hc  = await Store.get('cl:hcp'); S.hcp = (hc===null||hc===undefined)?13:hc;
   const ra  = await Store.get('cl:routine'); S.routineAuto = (ra===null||ra===undefined)?true:ra;
   S.aim     = await Store.get('cl:aim') || '';
@@ -733,6 +736,9 @@ function vBag(app,foot){
     <div class="block note">These distances decide what each shot was aimed at: the point on the
       hole's line that sits this far from your ball. Carry plus roll, on grass &mdash; not simulator
       carry. Seeded from your gapping session, so check them against a few real rounds.</div>
+    ${S.bag.length ? '' : `<div class="block note" style="border-color:var(--red)">
+      The bag is empty, so no club distances are available and aim targets cannot be worked out.
+      Reset below to rebuild it.</div>`}
     <div class="block flush">${S.bag.map((c,i)=>`
       <div class="shot"><div class="shot-top">
         <span class="shot-club" style="flex:1.4">${esc(c.club)}</span>
@@ -756,7 +762,10 @@ async function setDist(i,v){
   S.bag.sort((a,b)=>b.d-a.d);          // longest first, so the chips read in gapping order
   await save(); render();
 }
-async function delClub(i){ S.bag.splice(i,1); await save(); render(); }
+async function delClub(i){
+  if(S.bag.length<=1){ toast('Keep at least one club — use Reset to rebuild the bag'); return; }
+  S.bag.splice(i,1); await save(); render();
+}
 async function addClub(){
   const n=document.getElementById('nc').value.trim(), d=parseInt(document.getElementById('nd').value,10);
   if(!n){ toast('Give the club a name'); return; }
