@@ -527,7 +527,7 @@ function capture(){
 /* ============================================================
    STATE
    ============================================================ */
-let S = { screen:'home', courses:{}, cid:null, hsetup:0, round:null, hi:0, archive:[], tee:'', edit:null, bag:[], hcp:13, routineAuto:true, editPlan:false, editAim:false, aim:'' };
+let S = { screen:'home', courses:{}, cid:null, hsetup:0, round:null, hi:0, archive:[], tee:'', edit:null, bag:[], hcp:13, routineAuto:true, editPlan:false, editAim:false, aim:'', sat:false };
 const clubDist = name => { const c=S.bag.find(x=>x.club===name); return c && c.d>0 ? c.d : 0; };
 const uid = ()=> Math.random().toString(36).slice(2,9);
 const blankHoles = ()=> Array.from({length:18},(_,i)=>({n:i+1,par:4,si:i+1,path:[]}));
@@ -576,6 +576,7 @@ async function load(){
   const hc  = await Store.get('cl:hcp'); S.hcp = (hc===null||hc===undefined)?13:hc;
   const ra  = await Store.get('cl:routine'); S.routineAuto = (ra===null||ra===undefined)?true:ra;
   S.aim     = await Store.get('cl:aim') || '';
+  S.sat     = await Store.get('cl:sat') === true;
   if(!Object.keys(S.courses).length){
     const c=seedCourse('Heidelberg GC', HEIDELBERG, HGC_CARD);
     S.courses[c.id]=c;
@@ -591,6 +592,7 @@ async function save(){
   await Store.set('cl:hcp',S.hcp);
   await Store.set('cl:routine',S.routineAuto);
   await Store.set('cl:aim',S.aim);
+  await Store.set('cl:sat',S.sat);
 }
 
 function openCTS(){ document.getElementById('cts').classList.add('on'); window.scrollTo(0,0); }
@@ -634,7 +636,7 @@ const CH = ()=> S.round.holes[S.hi];
 const puttCount = h => h.putts.length;
 /* In stroke play the final putt of the hole is the one that went in. */
 const holed = (h,i) => i === h.putts.length-1;
-const blankPutt = ()=>({len:'',level:'',dist:'',line:'',prep:false,read:'',speed:'',stroke:'',mental:false,note:''});
+const blankPutt = ()=>({len:'',level:'',dist:'',line:'',side:'',prep:false,read:'',speed:'',stroke:'',mental:false,note:''});
 /* A typed score wins outright — it is the whole hole, penalties included. */
 const autoScore = h => h.shots.length + puttCount(h) + h.penalties;
 const holeScore = h => (h.score>0) ? h.score : autoScore(h);
@@ -698,6 +700,8 @@ function startBlock(){
       placeholder="One or two things you are actually trying to do today. Shown at the top of every hole.">${esc(S.aim)}</textarea>
     <button class="btn solid" style="margin-top:12px" onclick="newRound()">New round</button>`;
 }
+async function toggleSat(){ S.sat=!S.sat; await save(); render();
+  if(S.sat) toast('Satellite on — needs a data connection'); }
 async function toggleRoutine(){ S.routineAuto=!S.routineAuto; await save(); render();
   toast('Routine prompt '+(S.routineAuto?'on':'off')); }
 async function pickCourse(id){ S.cid=id; const c=S.courses[id];
@@ -900,6 +904,60 @@ async function setPlan(v){ curHole().plan=v; await save(); }
 async function reversePath(){ curHole().path.reverse(); await save(); render(); toast('Line reversed'); }
 
 /* ---------- plan view: the hole line, your ball positions, drawn to scale ---------- */
+/* Web Mercator helpers for the satellite layer */
+const TILE=256;
+const mercPx=(lat,lng,z)=>{
+  const n=TILE*Math.pow(2,z);
+  const sinl=Math.sin(rad(lat));
+  return { x:(lng+180)/360*n,
+           y:(0.5 - Math.log((1+sinl)/(1-sinl))/(4*Math.PI))*n };
+};
+const groundRes=(lat,z)=>156543.03392*Math.cos(rad(lat))/Math.pow(2,z);
+
+/* Tiles are north-up squares. The hole is drawn rotated, so every tile is placed at its
+   rotated screen position and spun by the same angle. Rotation is rigid, so a square
+   stays square — only its orientation changes. */
+function satLayer(o,cb,sb,x0,x1,y0,y1,sc){
+  const inv=(X,Y)=>({ x:X*cb + Y*sb, y:-X*sb + Y*cb });
+  const lls=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]].map(([X,Y])=>{
+    const m=inv(X,Y); return unproj(m.x,m.y,o); });
+  const latMin=Math.min(...lls.map(p=>p.lat)), latMax=Math.max(...lls.map(p=>p.lat));
+  const lngMin=Math.min(...lls.map(p=>p.lng)), lngMax=Math.max(...lls.map(p=>p.lng));
+  const latMid=(latMin+latMax)/2;
+
+  /* Pick the sharpest zoom that still fits inside the tile budget, then step down until it
+     does. Stepping beats refusing: a slightly soft picture is far better than a blank one. */
+  const BUDGET=16;
+  let z=Math.max(15,Math.min(19,Math.round(Math.log2(156543.03392*Math.cos(rad(latMid))*sc))));
+  let tx0,tx1,ty0,ty1;
+  for(;;){
+    const a=mercPx(latMax,lngMin,z), b=mercPx(latMin,lngMax,z);
+    tx0=Math.floor(a.x/TILE); tx1=Math.floor(b.x/TILE);
+    ty0=Math.floor(a.y/TILE); ty1=Math.floor(b.y/TILE);
+    if((tx1-tx0+1)*(ty1-ty0+1) <= BUDGET || z<=14) break;
+    z--;
+  }
+
+  const edgeM=TILE*groundRes(latMid,z);                 // tile edge in metres
+  const edge=edgeM*sc;                                  // and in screen units
+  const deg=-Math.atan2(sb,cb)*180/Math.PI;             // spin each tile to match
+  const n=Math.pow(2,z);
+  let out='';
+  for(let tx=tx0;tx<=tx1;tx++) for(let ty=ty0;ty<=ty1;ty++){
+    if(tx<0||ty<0||tx>=n||ty>=n) continue;
+    const lng=tx/n*360-180;
+    const lat=Math.atan(Math.sinh(Math.PI*(1-2*ty/n)))*180/Math.PI;
+    const m=proj({lat,lng},o);
+    const X=m.x*cb - m.y*sb, Y=m.x*sb + m.y*cb;
+    const sx=(X-x0)*sc, sy=(y1-Y)*sc;                   // top-left corner, screen
+    out+=`<image href="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${ty}/${tx}"
+      x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" width="${edge.toFixed(2)}" height="${edge.toFixed(2)}"
+      transform="rotate(${deg.toFixed(3)} ${sx.toFixed(2)} ${sy.toFixed(2)})"
+      preserveAspectRatio="none"/>`;
+  }
+  return out ? `<g clip-path="url(#clipHole)">${out}</g>` : '';
+}
+
 function svgHole(h){
   const path=h.path;
   if(!path || path.length<2) return '<div class="block note">No line drawn for this hole.</div>';
@@ -913,13 +971,19 @@ function svgHole(h){
   const all=P.concat(B);
   let x0=Math.min(...all.map(p=>p.x)), x1=Math.max(...all.map(p=>p.x));
   let y0=Math.min(...all.map(p=>p.y)), y1=Math.max(...all.map(p=>p.y));
-  const padM=15; x0-=padM; x1+=padM; y0-=padM; y1+=padM;
-  if(x1-x0 < 60){ const c=(x0+x1)/2; x0=c-30; x1=c+30; }
-  const wM=x1-x0, hM=y1-y0;
-  const MAXW=280, MAXH=400, LBL=30;                    // LBL leaves room for tick labels
-  const sc=Math.min(MAXW/wM, MAXH/hM);
+  /* The first path point sits at Y=0, so reaching back 70 m brings the tee complex in. */
+  const BACK=70, PAD_X=35, PAD_END=25, MIN_W=120, ASPECT=2.2, LONG=700, LBL=30;
+  x0-=PAD_X; x1+=PAD_X; y1+=PAD_END;
+  y0=Math.min(y0-PAD_END, -BACK);
+  if(x1-x0 < MIN_W){ const c=(x0+x1)/2; x0=c-MIN_W/2; x1=c+MIN_W/2; }
+  /* A 400 m hole in a 90 m corridor is unreadable on a phone, so widen until the picture is
+     no taller than ASPECT times its width. The extra is surrounding ground, which is the point. */
+  let wM=x1-x0, hM=y1-y0;
+  if(hM/wM > ASPECT){ const want=hM/ASPECT, c=(x0+x1)/2; x0=c-want/2; x1=c+want/2; wM=want; }
+  const sc=LONG/Math.max(wM,hM);
   const W=wM*sc, H=hM*sc, VW=W+LBL, VH=H+16;
   const sx=p=>((p.x-x0)*sc).toFixed(1), sy=p=>(H-(p.y-y0)*sc).toFixed(1);
+  const sat = S.sat ? satLayer(o,cb,sb,x0,x1,y0,y1,sc) : '';
   const line=P.map(p=>sx(p)+','+sy(p)).join(' ');
   const gp=P[P.length-1];
 
@@ -930,30 +994,38 @@ function svgHole(h){
     const f=(d-st[seg])/(st[seg+1]-st[seg]);
     const tx=P[seg].x+f*(P[seg+1].x-P[seg].x), ty=P[seg].y+f*(P[seg+1].y-P[seg].y);
     const X=((tx-x0)*sc).toFixed(1), Y=(H-(ty-y0)*sc).toFixed(1);
-    ticks+=`<line x1="${X-5}" y1="${Y}" x2="${+X+5}" y2="${Y}" stroke="var(--rule)" stroke-width="1"/>
-            <text x="${+X+9}" y="${+Y+3}" font-size="8" fill="var(--ink-2)" font-family="monospace">${d}</text>`;
+    ticks+=`<line x1="${X-7}" y1="${Y}" x2="${+X+7}" y2="${Y}" stroke="${S.sat?'#fff':'var(--rule)'}" stroke-width="1.5"/>
+            <text x="${+X+11}" y="${+Y+4}" font-size="13" fill="${S.sat?'#fff':'var(--ink-2)'}" font-family="monospace">${d}</text>`;
   }
   let walk='', dots='';
   B.forEach((p,i)=>{
     if(i) walk+=`<line x1="${sx(B[i-1])}" y1="${sy(B[i-1])}" x2="${sx(p)}" y2="${sy(p)}"
-                   stroke="var(--red)" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+                   stroke="var(--red)" stroke-width="2.5" stroke-dasharray="7 5"/>`;
     const onGreen = h.greenPos && i===B.length-1;
-    dots+=`<circle cx="${sx(p)}" cy="${sy(p)}" r="${onGreen?5:4}" fill="${onGreen?'var(--red)':'var(--paper)'}"
-             stroke="var(--red)" stroke-width="1.5"/>
-           <text x="${(+sx(p)+(onGreen?-14:8)).toFixed(1)}" y="${(+sy(p)+3).toFixed(1)}" font-size="9"
-             font-family="monospace" fill="var(--ink)">${onGreen?'G':(i+1)}</text>`;
+    dots+=`<circle cx="${sx(p)}" cy="${sy(p)}" r="${onGreen?8:7}" fill="${onGreen?'var(--red)':'#fff'}"
+             stroke="var(--red)" stroke-width="3"/>
+           <text x="${(+sx(p)+(onGreen?-24:13)).toFixed(1)}" y="${(+sy(p)+5).toFixed(1)}" font-size="15"
+             font-family="monospace" font-weight="700" fill="${S.sat?'#fff':'var(--ink)'}"
+             ${S.sat?'stroke="#000" stroke-width="0.6"':''}>${onGreen?'G':(i+1)}</text>`;
   });
   const bar=50*sc;
+  const VH2=VH;
   return `<svg viewBox="0 0 ${VW.toFixed(1)} ${VH.toFixed(1)}" width="${VW.toFixed(0)}" height="${VH.toFixed(0)}"
-    style="max-width:100%;height:auto;display:block;margin:0 auto">
-    <polyline points="${line}" fill="none" stroke="var(--ink)" stroke-width="2"/>
-    ${P.slice(1,-1).map(p=>`<rect x="${+sx(p)-2.5}" y="${+sy(p)-2.5}" width="5" height="5" fill="var(--ink)"/>`).join('')}
+    style="width:100%;height:auto;display:block">
+    <defs><clipPath id="clipHole"><rect x="0" y="0" width="${W.toFixed(1)}" height="${H.toFixed(1)}"/></clipPath></defs>
+    ${sat}
+    ${sat?`<polyline points="${line}" fill="none" stroke="#fff" stroke-width="8" stroke-opacity=".8"/>`:''}
+    <polyline points="${line}" fill="none" stroke="var(--ink)" stroke-width="3"/>
+    ${P.slice(1,-1).map(p=>`<rect x="${+sx(p)-4}" y="${+sy(p)-4}" width="8" height="8" fill="var(--ink)" stroke="#fff" stroke-width="1.5"/>`).join('')}
     ${ticks}
-    <circle cx="${sx(gp)}" cy="${sy(gp)}" r="9" fill="none" stroke="var(--ink)" stroke-width="1.5"/>
-    <circle cx="${sx(gp)}" cy="${sy(gp)}" r="2" fill="var(--ink)"/>
+    <circle cx="${sx(gp)}" cy="${sy(gp)}" r="14" fill="none" stroke="#fff" stroke-width="4"/>
+    <circle cx="${sx(gp)}" cy="${sy(gp)}" r="14" fill="none" stroke="var(--ink)" stroke-width="2"/>
+    <circle cx="${sx(gp)}" cy="${sy(gp)}" r="3" fill="var(--ink)"/>
     ${walk}${dots}
-    <line x1="6" y1="${H+8}" x2="${(6+bar).toFixed(1)}" y2="${H+8}" stroke="var(--ink-2)" stroke-width="1.5"/>
-    <text x="${(10+bar).toFixed(1)}" y="${H+11}" font-size="8" fill="var(--ink-2)" font-family="monospace">50 m</text>
+    <line x1="6" y1="${H+8}" x2="${(6+bar).toFixed(1)}" y2="${H+8}" stroke="var(--ink-2)" stroke-width="2"/>
+    <text x="${(14+bar).toFixed(1)}" y="${H+13}" font-size="12" fill="var(--ink-2)" font-family="monospace">50 m</text>
+    ${sat?`<text x="${(W+LBL-2).toFixed(1)}" y="${H+13}" font-size="10" text-anchor="end" fill="var(--ink-2)"
+      font-family="monospace">Imagery: Esri, Maxar, Earthstar Geographics</text>`:''}
   </svg>`;
 }
 
@@ -1028,6 +1100,7 @@ function vRound(app,foot){
       <label class="lbl">Level</label>${opt(i,'level',['Up','Down','Sidehill','Flat'])}
       <label class="lbl">Distance</label>${opt(i,'dist',['Good','Short','Past'])}
       <label class="lbl">Line</label>${opt(i,'line',['On','High','Low'])}
+      ${holed(h,i)?'':`<label class="lbl">Missed to the</label>${opt(i,'side',['Left','Right'])}`}
       <label class="lbl">Errors</label>
       <div class="chips">
         <button class="chip" aria-pressed="${p.prep}" onclick="puttFlag(${i},'prep')">Prep</button>
@@ -1080,6 +1153,10 @@ function vRound(app,foot){
              : '<span style="opacity:.6">No plan written for this hole yet. Tap to add one.</span>'}</div>`}
     <div class="eyebrow"><b>Hole</b><span class="fill">${toGreen(h)}</span></div>
     <div class="block">${svgHole(h)}</div>
+    <div class="chips two">
+      <button class="chip" aria-pressed="${S.sat}" onclick="toggleSat()">Satellite</button>
+      <button class="chip" aria-pressed="${!S.sat}" onclick="toggleSat()">Plain</button>
+    </div>
 
     <div class="eyebrow"><b>Shots</b><span class="fill">Log where you stand</span></div>
     <div class="block flush">${shots}</div>
@@ -1357,7 +1434,7 @@ function buildCSVs(rounds){
   const shots=[['date','course','tee','hole','par','si','shot','club','plan','lat','lng','gps_acc_m',
     'land_lat','land_lng','land_acc_m','shot_run_m',
     'aim_target','aim_side_m','aim_side','aim_long_m','aim_src','off_line_m','off_line_side','routine']];
-  const putts=[['date','course','tee','hole','putt','length_m','level','holed','distance','line',
+  const putts=[['date','course','tee','hole','putt','length_m','level','holed','distance','line','miss_side',
     'err_prep','err_read','err_speed','err_stroke','err_mental','note']];
   const holes=[['date','course','tee','hcp','hole','par','si','card_m','shots_received',
     'shots','putts','penalties','sand','score','score_src','to_par','nett','stableford','gir',
@@ -1383,7 +1460,7 @@ function buildCSVs(rounds){
     });
     h.putts.forEach((p,i)=>{ const hd=holed(h,i);
       putts.push([r.date,r.courseName,r.tee||'',h.n,i+1,p.len,p.level,
-      hd?1:0,p.dist,p.line,
+      hd?1:0,p.dist,p.line,hd?'':(p.side||''),
       p.prep?1:'',p.read||'',p.speed||'',p.stroke||'',p.mental?1:'',p.note||'']); });
     const sc=holeScore(h);
     const hcp=r.hcp===undefined?'':r.hcp, rx=hcp===''?'':received(h.si,hcp);
@@ -1438,6 +1515,9 @@ function vExport(app,foot){
        the pace was right whether or not it dropped, so speed control and read can be judged
        independently.<br><br>
        <b>holed</b> — derived: the last putt on the hole is the one that went in.<br><br>
+       <b>line vs miss_side</b> — <b>line</b> is High or Low relative to the break, which is a read
+       question. <b>miss_side</b> is plain Left or Right, which is a face and path question and the
+       only one that means anything on a straight putt. Recorded on missed putts only.<br><br>
        <b>level / distance / line</b> — blank where you did not record them. Filter on the ones you
        care about rather than assuming a blank means anything.<br><br>
        <b>stableford</b> — par plus shots received plus two, minus gross, floored at zero. Two points
