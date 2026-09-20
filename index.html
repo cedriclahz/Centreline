@@ -527,7 +527,7 @@ function capture(){
 /* ============================================================
    STATE
    ============================================================ */
-let S = { screen:'home', courses:{}, cid:null, hsetup:0, round:null, hi:0, archive:[], tee:'', edit:null, bag:[], hcp:13, routineAuto:true, editPlan:false, editAim:false, aim:'', sat:false };
+let S = { screen:'home', courses:{}, cid:null, hsetup:0, round:null, hi:0, archive:[], tee:'', edit:null, bag:[], hcp:13, routineAuto:true, editPlan:false, editAim:false, aim:'', sat:true };
 const clubDist = name => { const c=S.bag.find(x=>x.club===name); return c && c.d>0 ? c.d : 0; };
 const uid = ()=> Math.random().toString(36).slice(2,9);
 const blankHoles = ()=> Array.from({length:18},(_,i)=>({n:i+1,par:4,si:i+1,path:[]}));
@@ -576,7 +576,8 @@ async function load(){
   const hc  = await Store.get('cl:hcp'); S.hcp = (hc===null||hc===undefined)?13:hc;
   const ra  = await Store.get('cl:routine'); S.routineAuto = (ra===null||ra===undefined)?true:ra;
   S.aim     = await Store.get('cl:aim') || '';
-  S.sat     = await Store.get('cl:sat') === true;
+  const sv  = await Store.get('cl:sat2');
+  S.sat     = (sv===null||sv===undefined) ? true : sv===true;
   if(!Object.keys(S.courses).length){
     const c=seedCourse('Heidelberg GC', HEIDELBERG, HGC_CARD);
     S.courses[c.id]=c;
@@ -592,7 +593,7 @@ async function save(){
   await Store.set('cl:hcp',S.hcp);
   await Store.set('cl:routine',S.routineAuto);
   await Store.set('cl:aim',S.aim);
-  await Store.set('cl:sat',S.sat);
+  await Store.set('cl:sat2',S.sat);
 }
 
 function openCTS(){ document.getElementById('cts').classList.add('on'); window.scrollTo(0,0); }
@@ -642,8 +643,11 @@ const autoScore = h => h.shots.length + puttCount(h) + h.penalties;
 const holeScore = h => (h.score>0) ? h.score : autoScore(h);
 
 /* landing point of shot i = position of the next recorded ball location */
+/* A shot lands where the next one was played from. If that next shot has no position
+   (a missed or no-fix shot), the landing is unknown — never borrowed from a later ball,
+   which would credit one shot with the distance of two. */
 function landingOf(h,i){
-  for(let j=i+1;j<h.shots.length;j++) if(h.shots[j].pos) return h.shots[j].pos;
+  if(i+1 < h.shots.length) return h.shots[i+1].pos || null;
   return h.greenPos || null;
 }
 function shotDev(h,i){
@@ -1061,6 +1065,15 @@ function vRound(app,foot){
     else { gauge=`<div class="pending">${s.pos?'Awaiting next ball position':'No fix \u2014 tap the club to estimate the miss'}</div>`; }
     const ed = S.edit===i ? `
       <div style="margin-top:8px">
+        <label class="lbl">Club for shot ${i+1}</label>
+        <div class="chips grid">${S.bag.map(c=>`<button class="chip" aria-pressed="${s.club===c.club}"
+          onclick="setShotClub(${i},'${esc(c.club)}')">${esc(c.club)}</button>`).join('')}
+          <button class="chip" aria-pressed="${s.club==='Other'}" onclick="setShotClub(${i},'Other')">Other</button></div>
+        <div class="chips two">
+          <button class="chip" aria-pressed="${s.target!=='off'}" onclick="setShotPlan(${i},'on')">Playing the line</button>
+          <button class="chip" aria-pressed="${s.target==='off'}" onclick="setShotPlan(${i},'off')">Off plan</button>
+        </div>
+        <button class="btn ghost" onclick="addMissed(${i})">Insert a missed shot before this</button>
         <label class="lbl">Estimated miss, metres from the target line</label>
         <input type="number" inputmode="decimal" step="1" id="estv"
                value="${s.estLat!=null?Math.abs(s.estLat):''}">
@@ -1069,15 +1082,15 @@ function vRound(app,foot){
           <button class="chip" onclick="setEst(${i},'R')">Save as right</button>
         </div>
         <button class="btn ghost" onclick="clearEst(${i})">Clear estimate</button>
+        <button class="btn ghost" onclick="S.edit=null;render()">Done</button>
       </div>` : '';
     return `<div class="shot">
-      <div class="shot-top">
+      <div class="shot-top" style="cursor:pointer" onclick="S.edit=(S.edit===${i}?null:${i});render()">
         <span class="shot-seq">${i+1}</span>
-        <span class="shot-club" onclick="S.edit=(S.edit===${i}?null:${i});render()"
-          style="${s.club?'':'color:var(--red)'}">${s.club?esc(s.club):'club?'}</span>
-        <span class="shot-tag">${s.target==='off'?'off plan':'on the line'}</span>
+        <span class="shot-club" style="${s.club?'':'color:var(--red)'}">${s.club?esc(s.club):'club?'}</span>
+        <span class="shot-tag">${s.missed?'missed, no position':(s.target==='off'?'off plan':'on the line')}</span>
         <span class="shot-acc">${s.prep===true?'\u2713 ':(s.prep===false?'\u2717 ':'')}${s.pos?('\u00b1'+s.pos.acc):'no fix'}</span>
-        <span class="putt x" onclick="delShot(${i})">&times;</span>
+        <span class="putt x" onclick="event.stopPropagation();delShot(${i})">&times;</span>
       </div>${gauge}
       ${d&&d.run!=null?`<div class="pending">Shot ran ${d.run.toFixed(0)} m</div>`:''}${ed}
     </div>`;
@@ -1161,7 +1174,8 @@ function vRound(app,foot){
     <div class="eyebrow"><b>Shots</b><span class="fill">Log where you stand</span></div>
     <div class="block flush">${shots}</div>
     <div class="eyebrow" style="margin-top:12px"><b>Club</b><span class="fill">${
-      unnamed(h) ? 'naming shot '+(h.shots.findIndex(x=>!x.club)+1) : 'arms the next shot'}</span></div>
+      (h.shots.length && !h.shots[h.shots.length-1].club && !h.shots[h.shots.length-1].missed)
+        ? 'naming shot '+h.shots.length : 'arms the next shot'}</span></div>
     <div class="chips grid">${S.bag.map(c=>`<button class="chip" aria-pressed="${S.pick===c.club}" onclick="pickClub('${esc(c.club)}')">${esc(c.club)}<br><span style="font-size:9px;opacity:.55">${c.d||'?'}</span></button>`).join('')}
       <button class="chip" aria-pressed="${S.pick==='Other'}" onclick="pickClub('Other')">Other</button></div>
     <div class="chips two">
@@ -1169,6 +1183,9 @@ function vRound(app,foot){
       <button class="chip" aria-pressed="${S.tgt==='off'}" onclick="S.tgt='off';render()">Off plan</button>
     </div>
     <button class="btn ghost" onclick="openCTS()">Show C&middot;T&middot;S</button>
+    <button class="btn ghost" onclick="addMissed()">+ Forgot to log a shot</button>
+    <div class="note" style="margin:-2px 0 8px">Adds the stroke with no position. Tap it later to name the club.
+      If you already logged the ball after it, tap that shot and use <b>Insert a missed shot before this</b>.</div>
     <button class="btn ghost" onclick="logShot(true)">Log without a fix</button>
 
     <div class="eyebrow"><b>Putts</b><span class="fill">${
@@ -1237,12 +1254,29 @@ async function puttNote(i,v){
 /* ============================================================
    ACTIONS
    ============================================================ */
+/* Names the shot you just hit if it has no club yet; otherwise arms the next one.
+   Older unnamed shots are fixed by tapping them — they never hijack a club tap. */
 async function pickClub(c){
   const h = S.round ? CH() : null;
-  const gap = h ? h.shots.findIndex(x=>!x.club) : -1;
-  if(gap>=0){ h.shots[gap].club=c; S.pick=null; await save(); render(); return; }
+  const last = h && h.shots.length ? h.shots[h.shots.length-1] : null;
+  if(last && !last.club && !last.missed){ last.club=c; S.pick=null; await save(); render(); return; }
   S.pick = S.pick===c ? null : c;
   render();
+}
+async function setShotClub(i,c){
+  const s=CH().shots[i]; if(!s) return;
+  s.club = s.club===c ? null : c;
+  await save(); render();
+}
+async function setShotPlan(i,t){ const s=CH().shots[i]; if(!s) return; s.target=t; await save(); render(); }
+/* Insert a stroke you forgot to log. No position, so the shots either side lose their
+   landing / origin — honest blanks rather than one shot inheriting another's distance. */
+async function addMissed(at){
+  const h=CH();
+  const i = (at===undefined||at===null) ? h.shots.length : Math.max(0,Math.min(at,h.shots.length));
+  h.shots.splice(i,0,{club:null, target:'off', pos:null, estLat:null, prep:null, missed:true});
+  S.edit=null; await save(); render();
+  toast('Missed shot added as shot '+(i+1));
 }
 const unnamed = h => h.shots.filter(x=>!x.club).length;
 
@@ -1261,7 +1295,10 @@ async function setEst(i,side){
   S.edit=null; await save(); render();
 }
 async function clearEst(i){ CH().shots[i].estLat=null; S.edit=null; await save(); render(); }
-async function delShot(i){ CH().shots.splice(i,1); await save(); render(); }
+async function delShot(i){
+  if(!confirm('Delete shot '+(i+1)+'?')) return;
+  CH().shots.splice(i,1); S.edit=null; await save(); render();
+}
 async function markBall(){ const p=await capture(); if(p){ CH().greenPos=p; await save(); render(); } }
 /* The first putt of the hole is where the approach finished, so take the fix then.
    One less thing to remember, and it lands at exactly the right moment. */
@@ -1433,7 +1470,7 @@ function toCSV(rows){ return rows.map(r=>r.map(q).join(',')).join('\n'); }
 function buildCSVs(rounds){
   const shots=[['date','course','tee','hole','par','si','shot','club','plan','lat','lng','gps_acc_m',
     'land_lat','land_lng','land_acc_m','shot_run_m',
-    'aim_target','aim_side_m','aim_side','aim_long_m','aim_src','off_line_m','off_line_side','routine']];
+    'aim_target','aim_side_m','aim_side','aim_long_m','aim_src','off_line_m','off_line_side','routine','missed']];
   const putts=[['date','course','tee','hole','putt','length_m','level','holed','distance','line','miss_side',
     'err_prep','err_read','err_speed','err_stroke','err_mental','note']];
   const holes=[['date','course','tee','hcp','hole','par','si','card_m','shots_received',
@@ -1456,7 +1493,7 @@ function buildCSVs(rounds){
         d&&d.aimLat!=null?d.src:'',
         d&&d.off!=null?Math.abs(d.off).toFixed(1):'',
         d&&d.off!=null?(d.off>0?'left':'right'):'',
-        s.prep===true?1:(s.prep===false?0:'')]);
+        s.prep===true?1:(s.prep===false?0:''), s.missed?1:0]);
     });
     h.putts.forEach((p,i)=>{ const hd=holed(h,i);
       putts.push([r.date,r.courseName,r.tee||'',h.n,i+1,p.len,p.level,
